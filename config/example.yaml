@@ -1,0 +1,8 @@
+# Example values only. Copy to config/local.yaml (gitignored) to override.
+# Models per role are placeholders until docs/model-research.md and the evals decide (ADR model-choice).
+llm:
+  receptionist:
+    provider: gemini
+    model: TBD
+    usd_per_mtok_in: 0
+    usd_per_mtok_out: 0
