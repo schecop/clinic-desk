@@ -1,0 +1,29 @@
+# Synthetic patients and their appointments. Fictional: names and phones are invented
+# (phones in the +34 600 000 0xx range). Seeds the in-memory fake calendar.
+# Times are local (the clinic's timezone). Past appointments are history: they make a patient an
+# existing one (services with `requires_prior_visit`) and give the usual dentist.
+
+patients:
+  - { id: p01, name: Joan Martí, phone: "+34 600 000 001", lang: ca }
+  - { id: p02, name: Carmen López, phone: "+34 600 000 002", lang: es }
+  - { id: p03, name: Montserrat Vila, phone: "+34 600 000 003", lang: ca }
+  - { id: p04, name: Javier Ruiz, phone: "+34 600 000 004", lang: es }
+  - { id: p05, name: Aina Serra, phone: "+34 600 000 005", lang: ca }
+  - { id: p06, name: Pedro Navarro, phone: "+34 600 000 006", lang: es }
+
+appointments:
+  # history
+  - { id: H001, patient: p01, service: checkup, staff: puig, start: "2026-03-10T10:00" }
+  - { id: H002, patient: p02, service: first_visit, staff: roca, start: "2025-10-06T09:30" }
+  - { id: H003, patient: p02, service: filling, staff: roca, start: "2025-10-20T17:00" }
+  - { id: H004, patient: p03, service: first_visit, staff: ferrer, start: "2026-02-03T16:00" }
+  - { id: H005, patient: p03, service: ortho_review, staff: ferrer, start: "2026-04-14T16:30" }
+  - { id: H006, patient: p04, service: root_canal, staff: vidal, start: "2026-09-14T10:00" }
+  - { id: H007, patient: p05, service: first_visit, staff: puig, start: "2026-10-01T09:00" }
+  - { id: H008, patient: p06, service: cleaning, staff: soler, start: "2026-06-01T11:00" }
+  # upcoming (the week after "today" in the simulations, Wed 11 Nov 2026)
+  - { id: A001, patient: p05, service: extraction, staff: puig, start: "2026-11-16T12:00" }
+  - { id: A002, patient: p01, service: cleaning, staff: soler, start: "2026-11-17T10:00" }
+  - { id: A003, patient: p02, service: checkup, staff: roca, start: "2026-11-18T09:30" }
+  - { id: A004, patient: p03, service: ortho_review, staff: ferrer, start: "2026-11-19T17:00" }
+  - { id: A005, patient: p06, service: whitening, staff: soler, start: "2026-11-20T09:00" }
