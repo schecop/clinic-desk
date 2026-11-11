@@ -40,6 +40,7 @@ from clinic_desk.scheduling.models import Appointment
 from clinic_desk.scheduling.scheduler import Scheduler, SchedulingError
 
 PROMPT_PATH = Path("prompts/receptionist.md")
+MAX_UNCLEAR = 3  # replies in a row that are neither yes nor no before a proposal is dropped
 
 HANDOFF: dict[Lang, str] = {
     "es": "Disculpe, no he podido resolverlo. Le paso con la recepción: llame al {phone}.",
@@ -123,7 +124,6 @@ def context_block(desk: Desk, state: State) -> str:
         f"- Now: {when(now, lang)}, {now.year} ({desk.clinic.timezone})."
         f" Today is {now.date().isoformat()}.",
         "- Next days: " + "; ".join(days) + ".",
-        f"- The patient is speaking {_LANG_NAME[lang]}: reply in {_LANG_NAME[lang]}.",
     ]
     patient = desk.patients.get(state["patient_id"]) if state["patient_id"] else None
     lines.append(
@@ -131,8 +131,18 @@ def context_block(desk: Desk, state: State) -> str:
         if patient
         else "- Patient: not identified yet."
     )
+    pending = state["pending"]
+    if pending is not None:
+        question = confirmation_question(desk, pending, lang)
+        lines.append(
+            f'- Pending proposal, NOT confirmed and NOT written: "{question}" The patient'
+            " answered with neither a yes nor a no. Answer what they said in one or two"
+            " sentences. If they want a different slot, call propose_* again (it replaces this"
+            " one). Do not ask for confirmation yourself: the system repeats the question after"
+            " your reply. Never say it is done."
+        )
     outcome = state["outcome"]
-    if outcome is not None:
+    if outcome is not None and pending is None:
         if outcome.result == "done" and outcome.appointment is not None:
             verb = {"book": "Booked", "move": "Moved", "cancel": "Cancelled"}[outcome.kind]
             lines.append(
@@ -149,6 +159,14 @@ def context_block(desk: Desk, state: State) -> str:
                 f"- Last proposal: confirmed but the write failed ({outcome.problem});"
                 " nothing was written. Apologise and offer another option."
             )
+    # last on purpose (the most recent thing the model reads): in the first real chat the
+    # model answered a Catalan question in Spanish, pulled by earlier Spanish turns (FAILURES)
+    name = _LANG_NAME[lang]
+    lines.append(
+        f"- Reply language: {name}. The patient's latest message is in {name}: write your whole"
+        f" reply in {name}, even if earlier turns, tool results or policies are in another"
+        " language."
+    )
     return "\n".join(lines)
 
 
@@ -170,7 +188,9 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
             max_tokens=desk.max_tokens,
         )
         message = response.message
-        said = message.text.strip()
+        # only a final reply is spoken: text next to a tool call is a preamble ("voy a buscar
+        # su ficha") that, joined to the answer, made the patient hear two greetings
+        said = "" if message.tool_calls else message.text.strip()
         return {
             "messages": [*state["messages"], message],
             "replies": [*state["replies"], said] if said else state["replies"],
@@ -181,6 +201,7 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
         last = state["messages"][-1]
         assert isinstance(last, AssistantMessage)
         current: State = {**state}
+        before = state["pending"]
         results = []
         for call in last.tool_calls:
             result, updates = await run_tool(desk, current, call)
@@ -190,6 +211,10 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
             "messages": [*state["messages"], ToolResults(results)],
             "patient_id": current["patient_id"],
             "pending": current["pending"],
+            "proposed": (
+                fresh := current["pending"] is not None and current["pending"] is not before
+            ),
+            "unclear_streak": 0 if fresh else state["unclear_streak"],
         }
 
     async def ask_confirm(state: State) -> dict[str, Any]:
@@ -205,9 +230,15 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
         last = state["messages"][-1]
         label = classify_confirmation(last.content if isinstance(last, UserMessage) else "")
         if label == "yes":
-            return {"confirmation": label}
+            return {"confirmation": label, "unclear_streak": 0}
+        streak = state["unclear_streak"] + 1
+        if label == "unclear" and streak < MAX_UNCLEAR:
+            # keep the proposal: the agent answers what they said, then ask_confirm repeats
+            # the question. Dropping it here let the model ask "¿confirma?" itself and then
+            # claim a move that never happened (FAILURES)
+            return {"confirmation": label, "unclear_streak": streak}
         declined = Outcome(kind=state["pending"].kind, result="declined")
-        return {"confirmation": label, "pending": None, "outcome": declined}
+        return {"confirmation": label, "pending": None, "outcome": declined, "unclear_streak": 0}
 
     async def act(state: State) -> dict[str, Any]:
         pending = state["pending"]
@@ -236,12 +267,15 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
     def after_confirm(state: State) -> Literal["act", "agent"]:
         return "act" if state["confirmation"] == "yes" else "agent"
 
-    def after_agent(state: State) -> Literal["tools", "__end__"]:
+    def after_agent(state: State) -> Literal["tools", "ask_confirm", "__end__"]:
         last = state["messages"][-1]
-        return "tools" if isinstance(last, AssistantMessage) and last.tool_calls else "__end__"
+        if isinstance(last, AssistantMessage) and last.tool_calls:
+            return "tools"
+        # a proposal still pending after the agent's answer: the graph asks again, verbatim
+        return "ask_confirm" if state["pending"] is not None else "__end__"
 
     def after_tools(state: State) -> Literal["ask_confirm", "agent"]:
-        return "ask_confirm" if state["pending"] is not None else "agent"
+        return "ask_confirm" if state["proposed"] else "agent"
 
     graph = StateGraph(State)
     for name, node in (
@@ -277,6 +311,7 @@ class Receptionist:
             "confirmation": None,
             "replies": [],
             "steps": 0,
+            "proposed": False,
         }
         self.state = await self._graph.ainvoke(
             turn, {"recursion_limit": 4 * self.desk.max_steps + 8}

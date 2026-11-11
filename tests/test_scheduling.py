@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -211,3 +211,18 @@ def test_patients_are_found_by_phone_in_any_format() -> None:
         found = patients.find_by_phone(phone)
         assert found is not None and found.id == "p01", phone
     assert patients.register(name="Otro", phone="600000001", lang="es").id == "p01"
+
+
+def test_the_time_window_applies_before_the_usual_dentist_preference() -> None:
+    scheduler, _, _ = seeded()
+    fri = (date(2026, 11, 20), date(2026, 11, 20))  # Friday: mornings only
+    # Carmen's usual dentist is Roca; a window with nothing open returns nothing
+    assert (
+        asyncio.run(scheduler.find_slots("checkup", *fri, patient_id="p02", time_from=time(16)))
+        == []
+    )
+    late = asyncio.run(
+        scheduler.find_slots("checkup", *fri, patient_id="p02", time_from=time(14), limit=None)
+    )
+    assert late and all(s.start.time() >= time(14) for s in late)
+    assert {s.staff_id for s in late} == {"roca"}

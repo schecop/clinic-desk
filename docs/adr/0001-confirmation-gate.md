@@ -10,7 +10,7 @@ Clinics will not let an AI touch their calendar unless they can trust it. The ru
 - **One agent node** (LLM + tool loop) runs the conversation. Identifying the patient and collecting the details are guards inside the tools (`identify_patient_first`, `not_this_patients_appointment`), not nodes.
 - **The model has no write tool.** `propose_booking` / `propose_move` / `propose_cancel` validate the write with the scheduler's dry run and save it as `pending` in the state.
 - **`ask_confirm` renders the question from a template**, built from the pending slot in the patient's language. It ends the turn.
-- **`confirm` classifies the next reply with rules** (ES/CA). Only a short, plain yes counts as yes. Mixed or unclear replies are not a yes, so the pending action is dropped and the turn goes back to the agent.
+- **`confirm` classifies the next reply with rules** (ES/CA). Only a short, plain yes counts as yes. A no drops the pending action. *Amended 2026-11-11:* an unclear reply (a question, "sí, pero…") keeps it. The agent answers, a new `propose_*` may replace it, and the graph repeats the template; 3 unclear replies in a row drop it. The first version dropped it on any unclear reply, and in a real chat the model then asked "¿confirma?" itself and claimed a move that never happened (`FAILURES.md`).
 - **`act` is the only node that writes**, it is reachable only from `confirm`, and the scheduler re-checks the slot under a lock.
 
 ## Alternatives considered

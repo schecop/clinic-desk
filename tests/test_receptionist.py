@@ -100,11 +100,11 @@ def test_a_booking_is_written_only_after_the_patient_says_yes() -> None:
     "answer", ["No, mejor por la tarde.", "Sí, pero mejor a las 11", "¿Cuánto cuesta?"]
 )
 def test_anything_but_a_plain_yes_writes_nothing(answer: str) -> None:
-    desk, llm = desk_with(
+    desk, _ = desk_with(
         call("identify_patient", phone="600000002"),
         call("find_slots", **FILLING),
         propose_first_slot,
-        say("De acuerdo, ¿qué otra hora le va bien?"),
+        say("De acuerdo."),
     )
     r = chat(desk)
 
@@ -114,8 +114,103 @@ def test_anything_but_a_plain_yes_writes_nothing(answer: str) -> None:
         assert await upcoming(desk, "p02") == ["checkup@11-18 09:30"]
 
     asyncio.run(run())
-    assert r.state["pending"] is None and r.state["confirmation"] in ("no", "unclear")
+    assert r.state["confirmation"] in ("no", "unclear")
+
+
+def test_a_no_drops_the_proposal_and_tells_the_model() -> None:
+    desk, llm = desk_with(
+        call("identify_patient", phone="600000002"),
+        call("find_slots", **FILLING),
+        propose_first_slot,
+        say("De acuerdo, ¿qué otra hora le va bien?"),
+    )
+    r = chat(desk)
+    asyncio.run(r.reply("Soy Carmen, 600000002, un empaste el lunes."))
+    assert asyncio.run(r.reply("No, gracias.")) == "De acuerdo, ¿qué otra hora le va bien?"
+    assert r.state["pending"] is None
     assert "did NOT confirm" in llm.requests[-1].system
+
+
+def test_a_question_at_confirmation_keeps_the_proposal_and_the_graph_asks_again() -> None:
+    """Regression (second real chat): "¿y eso cuánto me cuesta?" dropped the proposal; the
+    model then asked "¿confirma?" itself and, on "Sí", claimed a move that never happened."""
+    desk, llm = desk_with(
+        call("identify_patient", phone="600000002"),
+        call("find_slots", **FILLING),
+        propose_first_slot,
+        call("clinic_info"),  # a read tool while the proposal is pending: no early re-ask
+        say("El empaste cuesta 70 €."),
+        say("Hecho, le esperamos el lunes."),
+    )
+    r = chat(desk)
+
+    async def run() -> None:
+        await r.reply("Soy Carmen, 600000002, un empaste el lunes.")
+        reply = await r.reply("¿Y eso cuánto me cuesta?")
+        price, question = reply.split("\n")
+        assert price == "El empaste cuesta 70 €."
+        assert question.startswith("Para confirmar: cita de empaste con el Dr. Pau Roca")
+        assert r.state["pending"] is not None
+        assert await upcoming(desk, "p02") == ["checkup@11-18 09:30"]
+        await r.reply("Sí.")
+        assert await upcoming(desk, "p02") == ["filling@11-16 09:00", "checkup@11-18 09:30"]
+
+    asyncio.run(run())
+    assert "Pending proposal, NOT confirmed and NOT written" in llm.requests[4].system
+
+
+def test_an_unclear_reply_can_replace_the_proposal() -> None:
+    desk, _ = desk_with(
+        call("identify_patient", phone="600000002"),
+        call("find_slots", **FILLING),
+        propose_first_slot,
+        lambda req: call(
+            "propose_booking", service_id="filling", staff_id="roca", start="2026-11-16T11:00"
+        ),
+        say("Hecho."),
+    )
+    r = chat(desk)
+
+    async def run() -> None:
+        await r.reply("Soy Carmen, 600000002, un empaste el lunes.")
+        question = await r.reply("Sí, pero mejor a las 11")
+        assert "a las 11:00" in question and "a las 09:00" not in question
+        await r.reply("Sí")
+        assert await upcoming(desk, "p02") == ["filling@11-16 11:00", "checkup@11-18 09:30"]
+
+    asyncio.run(run())
+
+
+def test_three_unclear_replies_in_a_row_drop_the_proposal() -> None:
+    desk, _ = desk_with(
+        call("identify_patient", phone="600000002"),
+        call("find_slots", **FILLING),
+        propose_first_slot,
+        say("Es un empaste."),
+        say("Dura 45 minutos."),
+        say("Vale, lo dejamos. ¿Algo más?"),
+    )
+    r = chat(desk)
+
+    async def run() -> None:
+        await r.reply("Soy Carmen, 600000002, un empaste el lunes.")
+        assert "Para confirmar" in await r.reply("¿Qué es exactamente?")
+        assert "Para confirmar" in await r.reply("¿Y cuánto dura?")
+        assert await r.reply("Bueno...") == "Vale, lo dejamos. ¿Algo más?"
+
+    asyncio.run(run())
+    assert r.state["pending"] is None and r.state["outcome"] is not None
+    assert r.state["outcome"].result == "declined"
+
+
+def test_text_next_to_a_tool_call_is_not_spoken() -> None:
+    desk, _ = desk_with(
+        call("identify_patient", text="Voy a buscar su ficha.", phone="600000002"),
+        say("Hola, Carmen. ¿En qué le ayudo?"),
+    )
+    assert (
+        asyncio.run(chat(desk).reply("Soy Carmen, 600000002")) == "Hola, Carmen. ¿En qué le ayudo?"
+    )
 
 
 def test_the_model_has_no_write_tool_and_saying_booked_books_nothing() -> None:
@@ -225,7 +320,7 @@ def test_the_context_block_gives_today_and_named_days() -> None:
     assert "Today is 2026-11-11" in system
     assert "2026-11-16 dilluns 16 de novembre" in system
     assert "2026-12-08" not in system  # beyond 14 days
-    assert "reply in Catalan" in system
+    assert system.rstrip().splitlines()[-1].startswith("- Reply language: Catalan.")
 
 
 @pytest.mark.parametrize(
@@ -278,3 +373,22 @@ def test_tool_specs_are_plain_json_schema() -> None:
         "date_from",
         "date_to",
     }
+
+
+def test_find_slots_says_when_it_truncates_and_can_search_afternoons() -> None:
+    """Regression (first real chat): the tool returned Roca's first 6 Monday slots, all in the
+    morning, and the model told the patient there was nothing in the afternoon."""
+    monday = {"service_id": "checkup", "date_from": "2026-11-16", "date_to": "2026-11-16"}
+    desk, llm = desk_with(
+        call("identify_patient", phone="600000002"),
+        call("find_slots", **monday),
+        call("find_slots", **monday, time_from="16:00"),
+        say("Tengo el lunes a las 16:00."),
+    )
+    asyncio.run(chat(desk).reply("Soy Carmen, 600000002. La revisión, el lunes por la tarde."))
+    whole_day = last_tool_payload(llm.requests[2])
+    assert whole_day["total_free"] > len(whole_day["slots"]) == 6
+    assert "Showing the earliest 6 of" in whole_day["note"]
+    afternoon = last_tool_payload(llm.requests[3])
+    assert [s["start"][-5:] for s in afternoon["slots"][:2]] == ["16:00", "16:15"]
+    assert {s["staff_id"] for s in afternoon["slots"]} == {"roca"}  # usual dentist kept

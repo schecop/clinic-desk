@@ -61,9 +61,16 @@ class Scheduler:
         *,
         patient_id: str | None = None,
         staff_id: str | None = None,
-        limit: int = 6,
+        time_from: time | None = None,
+        time_to: time | None = None,
+        limit: int | None = 6,
     ) -> list[Slot]:
-        """Free slots, earliest first, after the staff preference rule (see module docstring)."""
+        """Free slots, earliest first, after the staff preference rule (see module docstring).
+
+        `time_from`/`time_to` keep only visits starting in that local window (e.g. afternoons),
+        and apply before the preference: the usual dentist wins only if free in the window.
+        `limit=None` returns them all.
+        """
         if patient_id is not None:
             await self._check_patient(patient_id, service_id)
         tz = ZoneInfo(self.clinic.timezone)
@@ -72,8 +79,14 @@ class Scheduler:
             datetime.combine(day_to + timedelta(days=2), time(0), tzinfo=tz),
         )
 
+        def in_window(slot: Slot) -> bool:
+            local = slot.start.astimezone(tz).time()
+            return (time_from is None or local >= time_from) and (
+                time_to is None or local < time_to
+            )
+
         def search(staff_ids: list[str] | None) -> list[Slot]:
-            return free_slots(
+            found = free_slots(
                 self.clinic,
                 service_id,
                 day_from,
@@ -83,6 +96,7 @@ class Scheduler:
                 staff_ids=staff_ids,
                 patient_id=patient_id,
             )
+            return [s for s in found if in_window(s)]
 
         if staff_id is not None:
             return search([staff_id])[:limit]

@@ -48,6 +48,8 @@ class State(TypedDict):
     confirmation: Confirmation | None  # how `confirm` read the patient's reply this turn
     replies: list[str]  # what the patient hears this turn
     steps: int  # model calls this turn
+    proposed: bool  # a propose_* succeeded in the last tools step
+    unclear_streak: int  # replies in a row to a pending proposal that were neither yes nor no
 
 
 def new_state(lang: Lang = "es") -> State:
@@ -60,6 +62,8 @@ def new_state(lang: Lang = "es") -> State:
         confirmation=None,
         replies=[],
         steps=0,
+        proposed=False,
+        unclear_streak=0,
     )
 
 

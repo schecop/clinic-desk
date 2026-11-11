@@ -14,7 +14,7 @@ import json
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -28,6 +28,7 @@ from clinic_desk.scheduling.models import Appointment, Slot
 from clinic_desk.scheduling.scheduler import SchedulingError
 
 MAX_SEARCH_DAYS = 14
+MAX_SLOTS_SHOWN = 6
 
 
 class ToolError(Exception):
@@ -63,6 +64,10 @@ class FindSlots(_Args):
     date_from: date = Field(description="YYYY-MM-DD, first day to search")
     date_to: date = Field(description=f"YYYY-MM-DD, last day (at most {MAX_SEARCH_DAYS} days)")
     staff_id: str | None = Field(default=None, description="Only if the patient asks for someone")
+    time_from: time | None = Field(
+        default=None, description="HH:MM, earliest start; e.g. 16:00 for afternoons"
+    )
+    time_to: time | None = Field(default=None, description="HH:MM, latest start (exclusive)")
 
 
 class ProposeBooking(_Args):
@@ -240,16 +245,34 @@ async def find_slots(
     if a.date_to < start:
         raise ToolError("date_range_in_the_past", f"Today is {today.isoformat()}.")
     end = min(a.date_to, start + timedelta(days=MAX_SEARCH_DAYS - 1))
-    slots = await _scheduling(
+    found = await _scheduling(
         desk.scheduler.find_slots(
-            a.service_id, start, end, patient_id=patient_id, staff_id=a.staff_id
+            a.service_id,
+            start,
+            end,
+            patient_id=patient_id,
+            staff_id=a.staff_id,
+            time_from=a.time_from,
+            time_to=a.time_to,
+            limit=None,
         )
     )
-    return {
+    shown = found[:MAX_SLOTS_SHOWN]
+    result: dict[str, Any] = {
         "searched": [start.isoformat(), end.isoformat()],
-        "slots": [_slot_view(desk, s, state["lang"]) for s in slots],
-        **({} if slots else {"note": "No free slots in this range: offer to search other dates."}),
-    }, {}
+        "total_free": len(found),
+        "slots": [_slot_view(desk, s, state["lang"]) for s in shown],
+    }
+    if not found:
+        result["note"] = "No free slots in this range: offer to search other dates or times."
+    elif len(found) > len(shown):
+        # without this the model read the first 6 morning slots as "no afternoon slots" (FAILURES)
+        result["note"] = (
+            f"Showing the earliest {len(shown)} of {len(found)} free slots, up to "
+            f"{_local(desk, shown[-1].start):%Y-%m-%d %H:%M}. More exist later: never say a "
+            "time is unavailable without searching it, using time_from/time_to or other dates."
+        )
+    return result, {}
 
 
 async def my_appointments(
@@ -402,7 +425,10 @@ async def run_tool(desk: Desk, state: State, call: ToolCall) -> tuple[ToolResult
             "bad_arguments",
             "; ".join(e["msg"] + f" ({'.'.join(map(str, e['loc']))})" for e in err.errors()),
         )
-    if call.name.startswith("propose_") and state["pending"] is not None:
+    # a new proposal may replace a pending one only while the patient is answering it with
+    # something other than yes/no ("sí, pero a las 11"); otherwise it is one at a time
+    replacing = state["confirmation"] == "unclear"
+    if call.name.startswith("propose_") and state["pending"] is not None and not replacing:
         return error("one_proposal_at_a_time")
     try:
         payload, updates = await tool.handler(desk, state, args)
