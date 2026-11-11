@@ -1,0 +1,155 @@
+# Clinic policies, one entry per topic, in Spanish and Catalan. Synthetic.
+# This is the corpus behind the `search_policies` tool (light RAG): each language version is one
+# retrievable chunk, so a question in Catalan can be answered from the Catalan text.
+
+- id: cancellation
+  title:
+    es: Cancelaciones y cambios de cita
+    ca: Cancel·lacions i canvis de cita
+  body:
+    es: >-
+      Las citas se pueden cancelar o cambiar sin coste hasta 24 horas antes. Si se cancela con
+      menos de 24 horas o no se acude sin avisar, se cobra una penalización de 20 €, que se
+      descuenta de la siguiente visita. Tras dos ausencias sin aviso, solo se pueden reservar
+      citas por teléfono con la recepción humana. Las urgencias no tienen penalización.
+    ca: >-
+      Les cites es poden cancel·lar o canviar sense cost fins a 24 hores abans. Si es cancel·la
+      amb menys de 24 hores o no es ve sense avisar, es cobra una penalització de 20 €, que es
+      descompta de la visita següent. Després de dues absències sense avís, només es poden
+      reservar cites per telèfon amb la recepció humana. Les urgències no tenen penalització.
+
+- id: first_visit
+  title:
+    es: Primera visita
+    ca: Primera visita
+  body:
+    es: >-
+      La primera visita es gratuita y dura unos 30 minutos: exploración, diagnóstico y
+      presupuesto por escrito. Si hace falta una radiografía panorámica, cuesta 25 €. Conviene
+      llegar 10 minutos antes para rellenar la ficha. Hay que traer el DNI o NIE y, si se tienen,
+      radiografías o informes anteriores. Los tratamientos (empastes, endodoncias,
+      blanqueamientos, revisiones) solo se reservan después de una primera visita.
+    ca: >-
+      La primera visita és gratuïta i dura uns 30 minuts: exploració, diagnòstic i pressupost per
+      escrit. Si cal una radiografia panoràmica, costa 25 €. Convé arribar 10 minuts abans per
+      omplir la fitxa. Cal portar el DNI o NIE i, si se'n tenen, radiografies o informes
+      anteriors. Els tractaments (empastaments, endodòncies, blanquejos, revisions) només es
+      reserven després d'una primera visita.
+
+- id: payments
+  title:
+    es: Formas de pago
+    ca: Formes de pagament
+  body:
+    es: >-
+      Se paga al terminar cada visita, con tarjeta, Bizum o efectivo. Los tratamientos de más de
+      300 € se pueden fraccionar en hasta 6 cuotas sin intereses. Los presupuestos son válidos
+      durante 3 meses. Se entrega factura en el momento o por correo electrónico.
+    ca: >-
+      Es paga en acabar cada visita, amb targeta, Bizum o efectiu. Els tractaments de més de
+      300 € es poden fraccionar en fins a 6 quotes sense interessos. Els pressupostos són vàlids
+      durant 3 mesos. Es lliura factura en el moment o per correu electrònic.
+
+- id: insurance
+  title:
+    es: Seguros dentales
+    ca: Assegurances dentals
+  body:
+    es: >-
+      La clínica no forma parte del cuadro médico de ninguna aseguradora. Emitimos una factura
+      detallada con los códigos de tratamiento para que el paciente pida el reembolso a su
+      seguro, si su póliza lo permite. La recepción no puede saber qué cubre cada póliza: eso
+      hay que consultarlo con la aseguradora.
+    ca: >-
+      La clínica no forma part del quadre mèdic de cap asseguradora. Emetem una factura
+      detallada amb els codis de tractament perquè el pacient demani el reemborsament a la seva
+      assegurança, si la pòlissa ho permet. La recepció no pot saber què cobreix cada pòlissa:
+      cal consultar-ho amb l'asseguradora.
+
+- id: emergencies
+  title:
+    es: Urgencias
+    ca: Urgències
+  body:
+    es: >-
+      En horario de apertura, las urgencias dentales (dolor fuerte, pieza rota, flemón) se
+      atienden el mismo día en el primer hueco libre, por 50 €. Fuera de horario la clínica no
+      atiende urgencias. Si hay fiebre alta, hinchazón que dificulta respirar o tragar, o un
+      golpe fuerte en la cara, hay que llamar al 112 o ir a urgencias de un hospital.
+    ca: >-
+      En horari d'obertura, les urgències dentals (dolor fort, peça trencada, flemó) s'atenen el
+      mateix dia al primer forat lliure, per 50 €. Fora d'horari la clínica no atén urgències.
+      Si hi ha febre alta, inflor que dificulta respirar o empassar, o un cop fort a la cara, cal
+      trucar al 112 o anar a urgències d'un hospital.
+
+- id: medical_advice
+  title:
+    es: Consejo médico por teléfono
+    ca: Consell mèdic per telèfon
+  body:
+    es: >-
+      La recepción no da diagnósticos, consejos médicos ni recomendaciones de medicamentos o
+      dosis, ni por teléfono ni por chat. Ante cualquier síntoma se ofrece una cita (o una
+      urgencia, si hay dolor), y si los síntomas son graves se indica llamar al 112.
+    ca: >-
+      La recepció no fa diagnòstics, no dona consells mèdics ni recomana medicaments o dosis, ni
+      per telèfon ni per xat. Davant de qualsevol símptoma s'ofereix una cita (o una urgència,
+      si hi ha dolor), i si els símptomes són greus s'indica trucar al 112.
+
+- id: minors
+  title:
+    es: Menores de edad
+    ca: Menors d'edat
+  body:
+    es: >-
+      Atendemos a niños a partir de 6 años. Los menores de 16 años deben venir acompañados de su
+      madre, padre o tutor legal, que firma el consentimiento. La cita la puede pedir el adulto
+      responsable en nombre del menor.
+    ca: >-
+      Atenem infants a partir de 6 anys. Els menors de 16 anys han de venir acompanyats de la
+      mare, el pare o el tutor legal, que signa el consentiment. La cita la pot demanar l'adult
+      responsable en nom del menor.
+
+- id: late_arrival
+  title:
+    es: Retrasos
+    ca: Retards
+  body:
+    es: >-
+      Si el paciente llega más de 15 minutos tarde, puede que haya que acortar el tratamiento o
+      cambiar la cita a otro día para no retrasar al siguiente paciente. Si se sabe que se va a
+      llegar tarde, conviene avisar cuanto antes.
+    ca: >-
+      Si el pacient arriba més de 15 minuts tard, potser caldrà escurçar el tractament o canviar
+      la cita a un altre dia per no endarrerir el pacient següent. Si se sap que s'arribarà tard,
+      convé avisar com més aviat millor.
+
+- id: privacy
+  title:
+    es: Protección de datos
+    ca: Protecció de dades
+  body:
+    es: >-
+      Para reservar solo pedimos nombre, teléfono y, en la primera visita, DNI o NIE. La
+      recepción no comenta por teléfono el historial ni los tratamientos de un paciente con
+      terceros, ni siquiera con familiares, salvo que sea el tutor legal de un menor. Los datos
+      se tratan según el RGPD y el paciente puede pedir su acceso o borrado.
+    ca: >-
+      Per reservar només demanem nom, telèfon i, a la primera visita, DNI o NIE. La recepció no
+      comenta per telèfon l'historial ni els tractaments d'un pacient amb tercers, ni tan sols
+      amb familiars, llevat que sigui el tutor legal d'un menor. Les dades es tracten segons el
+      RGPD i el pacient en pot demanar l'accés o la supressió.
+
+- id: location
+  title:
+    es: Cómo llegar y accesibilidad
+    ca: Com arribar-hi i accessibilitat
+  body:
+    es: >-
+      La clínica está en el barrio del Raval, a 5 minutos a pie del metro Sant Antoni (L2) y
+      Universitat (L1 y L2). No tiene aparcamiento propio; hay un parking público a 200 metros.
+      El local está a pie de calle, sin escalones, y es accesible en silla de ruedas.
+    ca: >-
+      La clínica és al barri del Raval, a 5 minuts a peu del metro Sant Antoni (L2) i
+      Universitat (L1 i L2). No té aparcament propi; hi ha un pàrquing públic a 200 metres. El
+      local és a peu de carrer, sense graons, i és accessible amb cadira de rodes.

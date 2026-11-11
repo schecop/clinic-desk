@@ -1,0 +1,107 @@
+# Synthetic clinic. Fictional: name, people, address and phone are invented.
+# Facts the receptionist states (hours, prices, durations, who does what) come from this file
+# through tools, never from the model.
+
+name: Clínica Dental Arrel
+address: Carrer de la Riera Alta 00, 08001 Barcelona (fictional)
+phone: "+34 900 000 000"
+timezone: Europe/Madrid
+languages: [es, ca]
+slot_minutes: 15 # granularity of bookable start times (not a gap; see buffer_min per service)
+
+# Weekday: list of [open, close] ranges in local time. Missing day = closed.
+opening_hours:
+  mon: [["09:00", "14:00"], ["16:00", "20:00"]]
+  tue: [["09:00", "14:00"], ["16:00", "20:00"]]
+  wed: [["09:00", "14:00"], ["16:00", "20:00"]]
+  thu: [["09:00", "14:00"], ["16:00", "20:00"]]
+  fri: [["09:00", "15:00"]]
+
+# Public holidays in Barcelona over the simulation window (clinic closed).
+closed_dates:
+  - "2026-12-08" # La Immaculada
+  - "2026-12-25" # Nadal
+  - "2026-12-26" # Sant Esteve
+  - "2027-01-01" # Cap d'Any
+  - "2027-01-06" # Reis
+
+# Reduced hours: these replace the weekday's ranges on that date.
+special_hours:
+  "2026-12-24": [["09:00", "14:00"]] # Nit de Nadal, closed in the afternoon
+  "2026-12-31": [["09:00", "14:00"]] # Nit de Cap d'Any, closed in the afternoon
+
+staff:
+  - id: puig
+    name: Dra. Marta Puig
+    role: { es: odontóloga general, ca: odontòloga general }
+    days: [mon, tue, wed, thu, fri]
+    services: [first_visit, checkup, filling, extraction, emergency]
+  - id: roca
+    name: Dr. Pau Roca
+    role: { es: odontólogo general, ca: odontòleg general }
+    days: [mon, wed, fri]
+    services: [first_visit, checkup, filling, extraction, emergency]
+  - id: ferrer
+    name: Dr. Jordi Ferrer
+    role: { es: ortodoncista, ca: ortodontista }
+    days: [tue, thu]
+    services: [first_visit, ortho_review]
+  - id: vidal
+    name: Dra. Núria Vidal
+    role: { es: endodoncista, ca: endodoncista }
+    days: [mon, wed]
+    services: [root_canal, emergency]
+  - id: soler
+    name: Laia Soler
+    role: { es: higienista dental, ca: higienista dental }
+    days: [mon, tue, wed, thu, fri]
+    services: [cleaning, whitening]
+
+services:
+  - id: first_visit
+    name: { es: primera visita, ca: primera visita }
+    duration_min: 30
+    price_eur: 0
+    notes: { es: "Incluye exploración y presupuesto. La radiografía panorámica, si hace falta, cuesta 25 €.", ca: "Inclou exploració i pressupost. La radiografia panoràmica, si cal, costa 25 €." }
+  - id: checkup
+    name: { es: revisión, ca: revisió }
+    duration_min: 15
+    price_eur: 30
+    requires_prior_visit: true
+  - id: cleaning
+    name: { es: limpieza dental, ca: neteja dental }
+    duration_min: 45
+    price_eur: 60
+  - id: filling
+    name: { es: empaste, ca: empastament }
+    duration_min: 45
+    price_eur: 70
+    requires_prior_visit: true
+  - id: extraction
+    name: { es: extracción simple, ca: extracció simple }
+    duration_min: 30
+    buffer_min: 15
+    price_eur: 80
+    requires_prior_visit: true
+  - id: root_canal
+    name: { es: endodoncia, ca: endodòncia }
+    duration_min: 90
+    buffer_min: 15
+    price_eur: 250
+    requires_prior_visit: true
+  - id: whitening
+    name: { es: blanqueamiento, ca: blanqueig }
+    duration_min: 60
+    price_eur: 290
+    requires_prior_visit: true
+  - id: ortho_review
+    name: { es: revisión de ortodoncia, ca: revisió d'ortodòncia }
+    duration_min: 15
+    price_eur: 40
+    requires_prior_visit: true
+  - id: emergency
+    name: { es: urgencia dental, ca: urgència dental }
+    duration_min: 30
+    buffer_min: 15
+    price_eur: 50
+    notes: { es: "Se reserva en el primer hueco del día. Para dolor intenso con fiebre o hinchazón que dificulta respirar o tragar, llamar al 112.", ca: "Es reserva al primer forat del dia. Per a dolor intens amb febre o inflor que dificulta respirar o empassar, trucar al 112." }
