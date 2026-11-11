@@ -30,6 +30,7 @@ class BookingProblem(StrEnum):
     NOT_FOUND = "appointment_not_found"
     NOT_ACTIVE = "appointment_cancelled_or_past"
     SERVICE_MISMATCH = "move_must_keep_the_service"
+    NOT_YOURS = "not_this_patients_appointment"
 
 
 class SchedulingError(Exception):
@@ -107,10 +108,32 @@ class Scheduler:
             if a.status == "booked" and a.start > self._now()
         ]
 
+    # Dry runs: raise SchedulingError exactly as the write would, but write nothing. The
+    # receptionist validates a proposal with these before asking the patient to confirm it.
+
+    async def check_book(self, patient_id: str, slot: Slot) -> None:
+        await self._check_patient(patient_id, slot.service_id)
+        await self._check_free(slot, patient_id, ignore=None)
+
+    async def check_move(
+        self, appointment_id: str, slot: Slot, *, patient_id: str | None = None
+    ) -> Appointment:
+        current = await self._active(appointment_id, patient_id)
+        if slot.service_id != current.service_id:
+            raise SchedulingError(BookingProblem.SERVICE_MISMATCH)
+        await self._check_free(slot, current.patient_id, ignore=current.id)
+        return current
+
+    async def check_cancel(
+        self, appointment_id: str, *, patient_id: str | None = None
+    ) -> Appointment:
+        return await self._active(appointment_id, patient_id)
+
+    # Writes: the same checks, re-run under the lock, then the store write.
+
     async def book(self, patient_id: str, slot: Slot) -> Appointment:
         async with self._lock:
-            await self._check_patient(patient_id, slot.service_id)
-            await self._check_free(slot, patient_id, ignore=None)
+            await self.check_book(patient_id, slot)
             start, end, block_end = visit_times(self.clinic, slot)
             draft = Appointment(
                 id="",
@@ -123,12 +146,11 @@ class Scheduler:
             )
             return await self._store.insert(draft)
 
-    async def move(self, appointment_id: str, slot: Slot) -> Appointment:
+    async def move(
+        self, appointment_id: str, slot: Slot, *, patient_id: str | None = None
+    ) -> Appointment:
         async with self._lock:
-            current = await self._active(appointment_id)
-            if slot.service_id != current.service_id:
-                raise SchedulingError(BookingProblem.SERVICE_MISMATCH)
-            await self._check_free(slot, current.patient_id, ignore=current.id)
+            current = await self.check_move(appointment_id, slot, patient_id=patient_id)
             start, end, block_end = visit_times(self.clinic, slot)
             moved = current.model_copy(
                 update={
@@ -141,9 +163,9 @@ class Scheduler:
             await self._store.update(moved)
             return moved
 
-    async def cancel(self, appointment_id: str) -> Appointment:
+    async def cancel(self, appointment_id: str, *, patient_id: str | None = None) -> Appointment:
         async with self._lock:
-            current = await self._active(appointment_id)
+            current = await self.check_cancel(appointment_id, patient_id=patient_id)
             cancelled = current.model_copy(update={"status": "cancelled"})
             await self._store.update(cancelled)
             return cancelled
@@ -171,10 +193,12 @@ class Scheduler:
         if problem is not None:
             raise SchedulingError(problem)
 
-    async def _active(self, appointment_id: str) -> Appointment:
+    async def _active(self, appointment_id: str, patient_id: str | None = None) -> Appointment:
         current = await self._store.get(appointment_id)
         if current is None:
             raise SchedulingError(BookingProblem.NOT_FOUND)
+        if patient_id is not None and current.patient_id != patient_id:
+            raise SchedulingError(BookingProblem.NOT_YOURS)
         if current.status != "booked" or current.start <= self._now():
             raise SchedulingError(BookingProblem.NOT_ACTIVE)
         return current

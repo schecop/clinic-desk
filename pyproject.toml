@@ -6,10 +6,14 @@ authors = [{ name = "Pablo Sala" }]
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
+    "langgraph>=1.2.20",
     "pydantic>=2.10",
     "pyyaml>=6.0",
     "tzdata>=2026.6",
 ]
+
+[project.scripts]
+clinic-desk = "clinic_desk.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
