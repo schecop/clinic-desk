@@ -30,6 +30,7 @@ from clinic_desk.receptionist.language import (
     classify_confirmation,
     day_label,
     guess_lang,
+    of,
     when,
     with_staff,
 )
@@ -60,21 +61,21 @@ def confirmation_question(desk: Desk, pending: PendingAction, lang: Lang) -> str
     if pending.kind == "book":
         assert pending.slot is not None
         service = desk.clinic.service(pending.slot.service_id)
-        what = service.name.get(lang)
+        what = of(service.name.get(lang), lang)
         staff = with_staff(desk.clinic, pending.slot.staff_id, lang)
         at = when(pending.slot.start.astimezone(tz), lang)
         if lang == "es":
             return (
-                f"Para confirmar: cita de {what} {staff} el {at} (dura {service.duration_min} "
+                f"Para confirmar: cita {what} {staff} el {at} (dura {service.duration_min} "
                 "minutos). ¿Está de acuerdo? Responda sí o no."
             )
         return (
-            f"Per confirmar: cita de {what} {staff} el {at} (dura {service.duration_min} "
+            f"Per confirmar: cita {what} {staff} el {at} (dura {service.duration_min} "
             "minuts). Hi està d'acord? Respongui sí o no."
         )
     assert pending.appointment is not None
     current = pending.appointment
-    what = desk.clinic.service(current.service_id).name.get(lang)
+    what = of(desk.clinic.service(current.service_id).name.get(lang), lang)
     old = when(current.start.astimezone(tz), lang)
     if pending.kind == "move":
         assert pending.slot is not None
@@ -82,21 +83,21 @@ def confirmation_question(desk: Desk, pending: PendingAction, lang: Lang) -> str
         new = when(pending.slot.start.astimezone(tz), lang)
         if lang == "es":
             return (
-                f"Para confirmar: cambio su cita de {what} del {old} al {new}, {staff}. "
+                f"Para confirmar: cambio su cita {what} del {old} al {new}, {staff}. "
                 "¿Está de acuerdo? Responda sí o no."
             )
         return (
-            f"Per confirmar: canvio la seva cita de {what} del {old} al {new}, {staff}. "
+            f"Per confirmar: canvio la seva cita {what} del {old} al {new}, {staff}. "
             "Hi està d'acord? Respongui sí o no."
         )
     staff = with_staff(desk.clinic, current.staff_id, lang)
     if lang == "es":
         return (
-            f"Para confirmar: anulo su cita de {what} {staff} del {old}. "
+            f"Para confirmar: anulo su cita {what} {staff} del {old}. "
             "¿Está de acuerdo? Responda sí o no."
         )
     return (
-        f"Per confirmar: anul·lo la seva cita de {what} {staff} del {old}. "
+        f"Per confirmar: anul·lo la seva cita {what} {staff} del {old}. "
         "Hi està d'acord? Respongui sí o no."
     )
 

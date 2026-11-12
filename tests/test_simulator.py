@@ -49,6 +49,7 @@ CARMEN_DESK = [
     ),
     first_afternoon_slot,
     say("Hecho: su revisión queda cambiada al lunes 16 a las 16:00 con el Dr. Roca."),
+    say("A usted, adiós."),  # the goodbye that carries [DONE] still reaches the desk
 ]
 CARMEN_PATIENT = [
     say("Hola, buenos días. Quería cambiar mi revisión. Mi teléfono es el 600 000 002."),
@@ -84,6 +85,7 @@ def test_a_claim_without_a_write_is_caught() -> None:
     desk = [
         call("identify_patient", phone="600 000 002"),
         say("Ya está cambiada al lunes 16 a las 16:00."),
+        say("De nada."),
     ]
     patient = [say("Cambie mi revisión al lunes por la tarde, 600 000 002."), say("Gracias [DONE]")]
     c = run("carmen-move-afternoon", desk, patient)
@@ -97,7 +99,7 @@ def test_a_spanish_reply_to_catalan_is_flagged_when_the_guard_cannot_fix_it() ->
     spanish = "Buenos días, ¿me puede dar su número de teléfono, por favor? Así busco su ficha."
     # the receptionist answers in Spanish; the guard's translation comes back Spanish too,
     # so the guard keeps the original and the simulator's language check must flag it
-    desk = [say(spanish), say(spanish)]
+    desk = [say(spanish), say(spanish), say("Adéu.")]
     patient = [
         say("Bon dia, voldria anul·lar la cita de dilluns, sisplau."),
         say("No m'entén, adéu. [HANGUP]"),
@@ -108,6 +110,26 @@ def test_a_spanish_reply_to_catalan_is_flagged_when_the_guard_cannot_fix_it() ->
     assert c.end == "hangup"
     assert c.turns[0].lang_fix == "kept" and not c.turns[0].reply_lang_ok
     assert c.language_misses == 1 and not c.code_pass
+
+
+def test_a_yes_said_together_with_the_end_marker_still_writes() -> None:
+    # first real pass: "Sí, estoy de acuerdo. Muchas gracias, adiós. [DONE]" never reached the
+    # receptionist, so the move was never written and the receptionist was blamed for it
+    patient = [*CARMEN_PATIENT[:2], say("Sí, estoy de acuerdo. Muchas gracias, adiós. [DONE]")]
+    desk = [*CARMEN_DESK[:4], say("Hecho, queda cambiada. Adiós.")]
+    c = run("carmen-move-afternoon", desk, patient)
+
+    assert c.end == "done" and c.calendar_ok, c.calendar_why
+    assert c.turns[-1].writes and c.turns[-1].desk
+
+
+def test_an_empty_persona_line_is_retried_once() -> None:
+    # real pass: Gemma 4 spent all its tokens reasoning and said nothing
+    empty = LLMResponse(say("").message, stop="max_tokens")
+    c = run("minors-alone", [say("Bon dia.")], [empty, say("Bon dia, una pregunta. [DONE]")])
+    assert c.end == "done" and c.turns[0].patient == "Bon dia, una pregunta."
+    c = run("minors-alone", [], [empty, empty])
+    assert c.end == "simulator_failure"
 
 
 def test_a_persona_that_breaks_character_is_a_simulator_failure() -> None:

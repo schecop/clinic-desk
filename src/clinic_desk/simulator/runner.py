@@ -40,6 +40,8 @@ from clinic_desk.simulator.persona import Persona
 PERSONA_PROMPT = Path("prompts/persona.md")
 DEFAULT_NOW = datetime(2026, 11, 11, 10, 0, tzinfo=ZoneInfo("Europe/Madrid"))
 GREETING = "Clínica Dental Arrel, bon dia."
+# room to reason before the line: Gemma 4 always thinks first (stripped by the adapter)
+PERSONA_MAX_TOKENS = 1500
 _END = re.compile(r"\[(DONE|HANGUP)\]")
 _LANG_RULE: dict[Lang, str] = {"es": "Spanish", "ca": "Catalan"}
 
@@ -170,7 +172,16 @@ async def run_conversation(
     written_so_far = False
 
     for n in range(1, persona.max_turns + 1):
-        response = await patient.complete(system=system, messages=history, max_tokens=200)
+        try:
+            for _ in range(2):  # an empty line (reasoning cut by max_tokens) gets one retry
+                response = await patient.complete(
+                    system=system, messages=history, max_tokens=PERSONA_MAX_TOKENS
+                )
+                if response.text.strip():
+                    break
+        except Exception as exc:  # e.g. a free tier timing out: this call fails, not the pass
+            end, error = "error", f"persona: {type(exc).__name__}: {exc}"
+            break
         said = response.text.strip()
         marker = _END.search(said)
         said = _END.sub("", said).strip()
@@ -181,10 +192,12 @@ async def run_conversation(
         found = clear_lang(said)
         plan = persona.language
         persona_lang_ok = plan.mixes or found in (None, plan.expected(n))
-        if marker:
+        if marker and not said:
             turns.append(Turn(n=n, patient=said, persona_lang_ok=persona_lang_ok))
             end = "done" if marker.group(1) == "DONE" else "hangup"
             break
+        # a line that ends the call still reaches the receptionist: "Sí, de acuerdo, adiós
+        # [DONE]" carries the yes the write depends on (first real pass: 2 of 3 lost it)
         history.append(response.message)
         current = desk_side.state["lang"]
         snap = desk.store.snapshot()
@@ -193,7 +206,7 @@ async def run_conversation(
             reply = await desk_side.reply(said)
         except Exception as exc:  # a crash is a finding, not a reason to lose the pass
             turns.append(Turn(n=n, patient=said, persona_lang_ok=persona_lang_ok))
-            end, error = "error", f"{type(exc).__name__}: {exc}"
+            end, error = "error", f"receptionist: {type(exc).__name__}: {exc}"
             break
         writes = changes(snap, desk.store.snapshot())
         written_so_far = written_so_far or bool(writes)
@@ -212,6 +225,9 @@ async def run_conversation(
             )
         )
         history.append(UserMessage(reply))
+        if marker:
+            end = "done" if marker.group(1) == "DONE" else "hangup"
+            break
 
     patient_id = persona.caller.id
     if patient_id is None:

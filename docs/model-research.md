@@ -206,6 +206,21 @@ Assumptions: one conversation = 10 receptionist calls × ~3k input and ~200 outp
 - **Rate limits:** the simulator runs conversations in parallel. The `LLMClient` semaphore (from W1) has to be set per provider, lower on free tiers.
 - **Keys:** every project has its own API keys (Pablo, 2026-11-11), so none are reused from W1: Anthropic, OpenAI, Gemini and Mistral keys are new for this project, plus Groq or Cerebras if their free tier carries the persona. Separate keys also give a clean cost per project on each provider's dashboard.
 
+## Free tiers, checked 2026-11-12 (D3)
+
+One persona pass is ~8 calls × 20 personas × 3 repeats ≈ 480 calls of ~1.5k tokens. All figures below are third-party reports (no official page found for most); the project's own console is the truth.
+
+| Provider | What is free now | Fits a persona pass? |
+|---|---|---|
+| Gemini API | Gemini 3.8 Flash ~20 req/day; 3.5 Flash-Lite ~500/day, 10 RPM; **Gemma 4 (31B, 26B-A4B) reported at 15-30 RPM, up to 14,400 req/day**; Pro models 0 ([aipromptshub](https://aipromptshub.co/blog/gemini-api-free-tier-rate-limits), [imisofts](https://imisofts.com/blog/gemini-api-free-tier-limits/)). Gemma 4 takes system instructions on the Gemini API ([Google docs](https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api?hl=en)) | **Gemma 4: yes**, if the console confirms the quota. Flash-Lite: one pass a day at most. Flash: no |
+| Mistral | A free mode still exists; numeric limits are not published, only shown in the console; requires opting into training ([aifreeapi](https://www.aifreeapi.com/en/posts/mistral-api-free-tier)) | Unknown until the console shows it. Paid Ministral 3 8B is ~$0.12 per full pass |
+| Groq | ~30 RPM, 1,000 req/day, but ~8k tokens/min and ~200k tokens/day on the main models; Llama models gone ([klymentiev](https://klymentiev.com/blog/groq-pricing)) | No: 200k tokens/day is ~130 persona calls |
+| Cerebras | No permanent free tier since Jul 2026: $5 trial credits for 30 days with a card, 5 RPM ([toolfreebie](https://toolfreebie.com/cerebras-free-api/), [agentdeals](https://agentdeals.dev/vendor/cerebras)) | No |
+
+**Confirmed in the project's consoles (Pablo, 2026-11-12):** Gemma 4 31B on the Gemini API: 30 RPM, **16k TPM**, 14.4k RPD. The token limit binds first: ~6-10 persona calls a minute, so a full pass takes about an hour at concurrency 2. Mistral free `ministral-8b-2512`: 40k TPM but 0.03 RPS (~2 calls a minute): too slow, paid Ministral stays the fallback. **Persona for the first passes: Gemma 4 31B, free.**
+
+Free tiers may train on the data: acceptable only because everything is synthetic.
+
 ## Open items
 
 - [ ] Verify the free tiers (Gemini 3.8 Flash and Flash-Lite, Mistral, Groq, Cerebras): quota, models, terms.

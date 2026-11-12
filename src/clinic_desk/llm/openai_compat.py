@@ -16,6 +16,7 @@ ToolCall with `bad_arguments`, and the loop answers it with an error result inst
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -113,8 +114,11 @@ class OpenAICompatClient:
         stop = _STOPS.get(choice.get("finish_reason") or "", "end")
         if calls:
             stop = "tool_use"  # some compatible endpoints report "stop" alongside tool calls
+        content, thought = split_thought(raw.get("content") or "")
+        if thought:  # replay the turn without its reasoning: it only spends tokens
+            raw = {**raw, "content": content}
         return LLMResponse(
-            message=AssistantMessage(raw.get("content") or "", calls, self.provider, raw),
+            message=AssistantMessage(content, calls, self.provider, raw),
             stop=stop,
             input_tokens=int(usage.get("prompt_tokens", 0)),
             output_tokens=int(usage.get("completion_tokens", 0)),
@@ -135,6 +139,19 @@ class OpenAICompatClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+_THOUGHT = re.compile(r"^\s*<thought>(.*?)(?:</thought>|$)", re.DOTALL)
+
+
+def split_thought(content: str) -> tuple[str, str]:
+    """(answer, reasoning). Gemma 4 on the Gemini API always reasons, inline, as
+    '<thought>…</thought>answer', and refuses a thinking budget (HTTP 400). An unclosed block
+    (cut by max_tokens) leaves no answer."""
+    match = _THOUGHT.match(content)
+    if not match:
+        return content, ""
+    return content[match.end() :].strip(), match.group(1)
 
 
 def _assistant(m: AssistantMessage) -> dict[str, Any]:

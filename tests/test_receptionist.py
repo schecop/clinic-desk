@@ -18,7 +18,7 @@ import pytest
 from clinic_desk.llm.base import LLMResponse, ToolResults
 from clinic_desk.llm.scripted import Request, ScriptedLLM, call, say
 from clinic_desk.receptionist.graph import Receptionist, make_desk
-from clinic_desk.receptionist.language import classify_confirmation, guess_lang
+from clinic_desk.receptionist.language import classify_confirmation, guess_lang, of
 from clinic_desk.receptionist.state import Desk
 from clinic_desk.receptionist.tools import TOOLS
 
@@ -361,6 +361,14 @@ def test_confirmation_classifier(text: str, expected: str) -> None:
 )
 def test_guess_lang(text: str, expected: str) -> None:
     assert guess_lang(text, default="es") == expected
+
+
+def test_catalan_elides_de_before_a_vowel() -> None:
+    # first real pass read "la seva cita de extracció simple"
+    assert of("extracció simple", "ca") == "d'extracció simple"
+    assert of("higiene", "ca") == "d'higiene"
+    assert of("revisió", "ca") == "de revisió"
+    assert of("extracción simple", "es") == "de extracción simple"
 
 
 def test_tool_specs_are_plain_json_schema() -> None:

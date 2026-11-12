@@ -11,6 +11,27 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Regression guard:**
 -->
 
+## 2026-11-12 · The simulator blamed the receptionist for its own bug
+- **Symptom:** first real pass (3 personas, Gemma 4 as patient, Haiku as receptionist): code pass 1/3. Carmen's move and Marc's first visit were never written, so `calendar: False`.
+- **Found by:** reading the transcripts before trusting the score. Both patients answered the confirmation with "Sí, estoy de acuerdo. Muchas gracias, adiós. [DONE]" in one turn.
+- **Root cause (class):** simulator. The runner ended the call on `[DONE]` without passing that line to the receptionist, so the yes that the write depends on never arrived. The receptionist did nothing wrong: the score measured the simulator.
+- **Fix:** a line carrying an end marker is still delivered, and the call ends after the receptionist's reply. Persona prompt: answer a confirmation first, do not end the call in the same turn.
+- **Regression guard:** `test_a_yes_said_together_with_the_end_marker_still_writes`. Re-run: code pass 2/2 counted.
+
+## 2026-11-12 · Gemma 4 thinks before every line, and sometimes never speaks
+- **Symptom:** the first pass crashed on `ReadTimeout` (4 attempts). In a probe, 56 s and an empty answer with `max_tokens` 200. Later, one empty patient turn after 32 s (`stop=max_tokens`).
+- **Found by:** a timed one-call probe, then the `calls` log of the conversation JSON.
+- **Root cause (class):** simulator (model). Gemma 4 on the Gemini API always writes `<thought>…</thought>` before the answer and rejects `reasoning_effort` ("Thinking budget is not supported", HTTP 400). Asking it not to think in the prompt does not work. Also a runner bug: one failing persona call stopped the whole pass.
+- **Fix:** the OpenAI-compatible adapter strips the thought block from the text and from the replayed turn; persona `max_tokens` 1500; an empty line is retried once; a persona or receptionist API error ends that conversation as `error` (out of the score), not the pass. Persona model 26B-A4B (~7 s a call) instead of 31B (~30 s).
+- **Regression guard:** `tests/test_llm_adapters.py` (split, raw replay, failure isolation), `test_an_empty_persona_line_is_retried_once`.
+
+## 2026-11-12 · "la seva cita de extracció"
+- **Symptom:** the Catalan confirmation template read "cita de extracció simple".
+- **Found by:** first real pass transcript.
+- **Root cause (class):** tool (template). No elision of "de" before a vowel in Catalan.
+- **Fix:** `language.of()` gives "d'extracció", "d'higiene", "de revisió".
+- **Regression guard:** `test_catalan_elides_de_before_a_vowel`.
+
 ## 2026-11-11 · The receptionist claimed a move that never happened
 - **Symptom:** at the confirmation question Carmen asked "¿Y eso cuánto me cuesta?". The receptionist gave the price, then asked "¿Confirma el cambio…? Responda sí o no" itself, twice. On "Sí" it said "Ya está confirmado… queda cambiada para el lunes 16 a las 16:00". The calendar still had the Wednesday 09:30 appointment. The gate held (no write without a yes to the template), but the patient was told a falsehood about her appointment: the worst kind of failure for this product.
 - **Found by:** second real-model chat with `--trace` (Pablo): after the question, `pending None`; no `propose_move` call on the later turns; the context block said "did NOT confirm… nothing was written" while the model said it was done.

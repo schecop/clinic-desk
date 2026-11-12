@@ -343,6 +343,13 @@ def when(moment: datetime, lang: Lang) -> str:
     return f"{day_label(moment.date(), lang)} {'a las' if lang == 'es' else 'a les'} {moment:%H:%M}"
 
 
+def of(noun: str, lang: Lang) -> str:
+    """'de revisión' / 'de revisió' / "d'extracció": Catalan elides 'de' before a vowel or h."""
+    if lang == "ca" and _plain(noun)[:1] in tuple("aeiouh"):
+        return f"d'{noun}"
+    return f"de {noun}"
+
+
 def with_staff(clinic: Clinic, staff_id: str, lang: Lang) -> str:
     """'con el Dr. Pau Roca' / 'amb la Dra. Marta Puig' / 'con Laia Soler'."""
     name = next(m.name for m in clinic.staff if m.id == staff_id)
