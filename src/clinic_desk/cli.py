@@ -27,9 +27,12 @@ DEFAULT_NOW = "2026-11-11T10:00"
 
 async def chat(now: datetime, lang: str, trace: bool) -> None:
     load_env()
-    choice = load_config().llm["receptionist"]
+    roles = load_config().llm
+    choice = roles["receptionist"]
     llm = build_llm(choice)
-    desk = make_desk(llm, lambda: now)
+    # the language guard's model; without its own role it reuses the receptionist's
+    translator = build_llm(roles["translator"]) if "translator" in roles else None
+    desk = make_desk(llm, lambda: now, translator=translator)
     receptionist = Receptionist(desk, "ca" if lang == "ca" else "es")
     print(f"[{choice.provider}/{choice.model} · fake calendar · now {now:%a %Y-%m-%d %H:%M}]")
     print("[empty line or Ctrl-C to quit]\n")
@@ -49,6 +52,8 @@ async def chat(now: datetime, lang: str, trace: bool) -> None:
         pass
     finally:
         await llm.aclose()
+        if translator is not None:
+            await translator.aclose()
     print(f"\nupcoming in the fake calendar: {await _summary(receptionist)}")
 
 
@@ -62,8 +67,9 @@ def _print_trace(new: list[Message], state: State, seconds: float) -> None:
                 body = r.content if len(r.content) <= 300 else r.content[:300] + "…"
                 print(f"  {'✗' if r.is_error else '→'} {r.name}: {body}")
     pending = state["pending"].kind if state["pending"] else None
+    fix = f" · lang fix {state['lang_fix']}" if state["lang_fix"] else ""
     print(
-        f"  [lang {state['lang']} · confirm {state['confirmation']} · pending {pending}"
+        f"  [lang {state['lang']}{fix} · confirm {state['confirmation']} · pending {pending}"
         f" · {state['steps']} model calls · {seconds:.1f}s]"
     )
 

@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from clinic_desk.clinic import Clinic, Lang
 from clinic_desk.llm.base import LLMClient, Message
 from clinic_desk.receptionist.language import Confirmation
+from clinic_desk.receptionist.translate import LangFix
 from clinic_desk.scheduling.fake import PatientDirectory
 from clinic_desk.scheduling.models import Appointment, Slot
 from clinic_desk.scheduling.scheduler import Scheduler
@@ -50,6 +51,7 @@ class State(TypedDict):
     steps: int  # model calls this turn
     proposed: bool  # a propose_* succeeded in the last tools step
     unclear_streak: int  # replies in a row to a pending proposal that were neither yes nor no
+    lang_fix: LangFix | None  # set when the model replied in the wrong language this turn
 
 
 def new_state(lang: Lang = "es") -> State:
@@ -64,6 +66,7 @@ def new_state(lang: Lang = "es") -> State:
         steps=0,
         proposed=False,
         unclear_streak=0,
+        lang_fix=None,
     )
 
 
@@ -79,3 +82,4 @@ class Desk:
     clock: Callable[[], datetime]
     max_steps: int = 6  # model calls per patient turn before handing off to a human
     max_tokens: int = 600
+    translator: LLMClient | None = None  # language guard model; None: the receptionist's

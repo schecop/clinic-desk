@@ -44,6 +44,7 @@ Latency and cost matter as much as quality. Any model is allowed: open-source, f
 
 ## Conventions
 - Python 3.12+, uv, ruff, mypy (strict), pytest, `src/` layout.
+- LLM prompts live in `prompts/`. Templates that are part of the confirmation gate (confirmation question, handoff, context block) stay in code. The coach edits only `prompts/receptionist.md`.
 - Observability from day 1: every simulated conversation is one Langfuse trace (receptionist, persona and judge calls as generations, tool calls as spans), and the eval report links to it.
 - Tests never call live models or APIs: a scripted fake `LLMClient` (fixed replies and tool calls) drives the real graph and loops, and runs in CI. Real-model evals are separate, opt-in, and run on purpose.
 - Never commit secrets. Keys go in `.env` (gitignored) and are listed in `.env.example`; the Google OAuth token lives in `token.json` (gitignored).

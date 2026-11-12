@@ -15,6 +15,9 @@ from clinic_desk.clinic import Clinic, Lang
 Confirmation = Literal["yes", "no", "unclear"]
 
 # --- language ------------------------------------------------------------------------------
+# Marker words only: a word both languages use ("el", "del", "una", "mal", and "es", which is a
+# Catalan pronoun too) would pull a Catalan reply towards Spanish and trigger a needless
+# translation.
 
 _CA = {
     "vull",
@@ -61,12 +64,34 @@ _CA = {
     "res",
     "gens",
     "hi",
-    "mal",
     "dir",
     "dic",
     "nom",
     "us",
     "plau",
+    "li",
+    "pot",
+    "està",
+    "té",
+    "vol",
+    "ja",
+    "així",
+    "quan",
+    "després",
+    "llavors",
+    "necessita",
+    "truqui",
+    "ara",
+    "dia",
+    "dies",
+    "matí",
+    "preu",
+    "hores",
+    "minuts",
+    "forat",
+    "seu",
+    "cancel·lació",
+    "aleshores",
 }
 _ES = {
     "quiero",
@@ -106,30 +131,70 @@ _ES = {
     "pero",
     "nada",
     "vale",
-    "es",
     "qué",
     "hacer",
     "duele",
     "nombre",
     "cita",
     "para",
-    "el",
-    "del",
     "y",
-    "una",
+    "su",
+    "sus",
+    "le",
+    "puede",
+    "está",
+    "hay",
+    "tiene",
+    "quiere",
+    "ya",
+    "así",
+    "cuándo",
+    "después",
+    "entonces",
+    "necesita",
+    "llame",
+    "ahora",
+    "día",
+    "precio",
+    "horas",
+    "minutos",
+    "hueco",
+    "cancelación",
 }
+
+
+def _marker_counts(text: str) -> tuple[int, int]:
+    words = re.findall(r"[\w·']+", text.lower())
+    return sum(w in _CA for w in words), sum(w in _ES for w in words)
 
 
 def guess_lang(text: str, default: Lang) -> Lang:
     """Spanish or Catalan by marker words; the current language when the text is too short."""
-    words = re.findall(r"[\w·']+", text.lower())
-    ca = sum(w in _CA for w in words)
-    es = sum(w in _ES for w in words)
+    ca, es = _marker_counts(text)
     if ca > es:
         return "ca"
     if es > ca:
         return "es"
     return default
+
+
+def clear_lang(text: str, margin: int = 2) -> Lang | None:
+    """The language of a reply only when the markers say so by a clear margin, else None.
+
+    Stricter than `guess_lang` on purpose: it decides whether to translate the model's reply,
+    and a false alarm costs a model call and risks rewording a reply that was fine.
+    """
+    ca, es = _marker_counts(text)
+    if ca - es >= margin:
+        return "ca"
+    if es - ca >= margin:
+        return "es"
+    return None
+
+
+def numbers_in(text: str) -> list[str]:
+    """Every digit run, in order: what a translation must keep (times, dates, prices, phones)."""
+    return re.findall(r"\d+", text)
 
 
 # --- confirmation --------------------------------------------------------------------------

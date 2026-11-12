@@ -35,6 +35,7 @@ from clinic_desk.receptionist.language import (
 )
 from clinic_desk.receptionist.state import Desk, Outcome, PendingAction, State, new_state
 from clinic_desk.receptionist.tools import SPECS, run_tool
+from clinic_desk.receptionist.translate import LangFix, needs_translation, translate
 from clinic_desk.scheduling.fake import load_seed
 from clinic_desk.scheduling.models import Appointment
 from clinic_desk.scheduling.scheduler import Scheduler, SchedulingError
@@ -191,10 +192,22 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
         # only a final reply is spoken: text next to a tool call is a preamble ("voy a buscar
         # su ficha") that, joined to the answer, made the patient hear two greetings
         said = "" if message.tool_calls else message.text.strip()
+        fix: LangFix | None = state["lang_fix"]
+        if said and needs_translation(said, state["lang"]):
+            translated = await translate(
+                desk.translator or desk.llm, said, state["lang"], desk.max_tokens
+            )
+            fix = "translated" if translated else "kept"
+            if translated:
+                said = translated
+                # the history holds what the patient heard; raw is dropped so the provider
+                # is not replayed the untranslated turn
+                message = AssistantMessage(translated, provider=message.provider)
         return {
             "messages": [*state["messages"], message],
             "replies": [*state["replies"], said] if said else state["replies"],
             "steps": state["steps"] + 1,
+            "lang_fix": fix,
         }
 
     async def tools(state: State) -> dict[str, Any]:
@@ -312,6 +325,7 @@ class Receptionist:
             "replies": [],
             "steps": 0,
             "proposed": False,
+            "lang_fix": None,
         }
         self.state = await self._graph.ainvoke(
             turn, {"recursion_limit": 4 * self.desk.max_steps + 8}
@@ -323,7 +337,12 @@ def load_prompt(path: Path = PROMPT_PATH) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def make_desk(llm: LLMClient, clock: Callable[[], datetime], prompt: str | None = None) -> Desk:
+def make_desk(
+    llm: LLMClient,
+    clock: Callable[[], datetime],
+    prompt: str | None = None,
+    translator: LLMClient | None = None,
+) -> Desk:
     """A desk on the seeded fake calendar: what tests, the CLI and the simulator use."""
     clinic = load_clinic()
     patients, store = load_seed(clinic)
@@ -334,4 +353,5 @@ def make_desk(llm: LLMClient, clock: Callable[[], datetime], prompt: str | None 
         llm=llm,
         prompt=prompt if prompt is not None else load_prompt(),
         clock=clock,
+        translator=translator,
     )
