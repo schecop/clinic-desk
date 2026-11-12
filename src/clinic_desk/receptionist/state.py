@@ -13,6 +13,7 @@ from clinic_desk.clinic import Clinic, Lang
 from clinic_desk.llm.base import LLMClient, Message
 from clinic_desk.receptionist.language import Confirmation
 from clinic_desk.receptionist.translate import LangFix
+from clinic_desk.retrieval.base import Retriever
 from clinic_desk.scheduling.fake import PatientDirectory
 from clinic_desk.scheduling.models import Appointment, Slot
 from clinic_desk.scheduling.scheduler import Scheduler
@@ -83,3 +84,6 @@ class Desk:
     max_steps: int = 6  # model calls per patient turn before handing off to a human
     max_tokens: int = 600
     translator: LLMClient | None = None  # language guard model; None: the receptionist's
+    # how policies reach the model: all in the prompt, or a search_policies tool (ADR-0003)
+    policies: Literal["prompt", "search"] = "prompt"
+    retriever: Retriever | None = None  # search mode only; make_desk defaults it to BM25

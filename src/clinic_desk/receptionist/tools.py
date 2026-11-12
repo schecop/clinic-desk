@@ -11,7 +11,6 @@ identified, and a patient can only move or cancel their own appointments.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -216,22 +215,17 @@ async def clinic_info(desk: Desk, state: State, a: NoArgs) -> tuple[dict[str, An
 async def search_policies(
     desk: Desk, state: State, a: SearchPolicies
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Placeholder retrieval (word overlap) until the RAG step compares BM25 and embeddings."""
+    """Search mode only: the top 2 policies from the desk's retriever, in the patient's language.
+
+    Both languages are indexed, so a Spanish query for a Catalan patient still finds the policy.
+    """
+    assert desk.retriever is not None
     lang = state["lang"]
-    query = set(re.findall(r"\w{4,}", a.query.lower()))
-
-    def score(text: str) -> int:
-        return len(query & set(re.findall(r"\w{4,}", text.lower())))
-
-    ranked = sorted(
-        desk.clinic.policies,
-        key=lambda p: score(p.title.get(lang) + " " + p.body.get(lang)),
-        reverse=True,
-    )
+    await desk.retriever.prepare([a.query])
+    top = [desk.clinic.policy(pid) for pid in desk.retriever.rank(a.query)[:2]]
     return {
         "results": [
-            {"policy_id": p.id, "title": p.title.get(lang), "text": p.body.get(lang)}
-            for p in ranked[:2]
+            {"policy_id": p.id, "title": p.title.get(lang), "text": p.body.get(lang)} for p in top
         ]
     }, {}
 
@@ -401,7 +395,17 @@ TOOLS: dict[str, Tool] = {
         ),
     )
 }
-SPECS: list[ToolSpec] = [t.spec for t in TOOLS.values()]
+
+
+def tools_for(desk: Desk) -> dict[str, Tool]:
+    """The tools this desk offers: `search_policies` only when policies are not in the prompt."""
+    if desk.policies == "search":
+        return TOOLS
+    return {name: tool for name, tool in TOOLS.items() if name != "search_policies"}
+
+
+def specs_for(desk: Desk) -> list[ToolSpec]:
+    return [t.spec for t in tools_for(desk).values()]
 
 
 async def run_tool(desk: Desk, state: State, call: ToolCall) -> tuple[ToolResult, dict[str, Any]]:
@@ -413,9 +417,10 @@ async def run_tool(desk: Desk, state: State, call: ToolCall) -> tuple[ToolResult
             call.id, call.name, json.dumps(body, ensure_ascii=False), is_error=True
         ), {}
 
-    tool = TOOLS.get(call.name)
+    offered = tools_for(desk)
+    tool = offered.get(call.name)
     if tool is None:
-        return error("unknown_tool", f"Available: {', '.join(TOOLS)}")
+        return error("unknown_tool", f"Available: {', '.join(offered)}")
     if call.bad_arguments is not None:
         return error("arguments_not_json")
     try:

@@ -6,3 +6,10 @@ llm:
     model: TBD
     usd_per_mtok_in: 0
     usd_per_mtok_out: 0
+  # optional: the language guard's translator (ADR-0002); without it the receptionist's model translates
+  # translator: { provider: anthropic, model: ..., usd_per_mtok_in: ..., usd_per_mtok_out: ... }
+
+# How the receptionist gets the clinic's policies (ADR-0003)
+receptionist:
+  policies: prompt      # prompt (default: all policies in the cached prompt) | search (search_policies tool)
+  retriever: bm25       # search mode only: bm25 (local) | an OpenAI embedding model, e.g. text-embedding-3-small

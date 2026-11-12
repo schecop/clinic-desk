@@ -131,6 +131,12 @@ class Clinic(_Strict):
                 return s
         raise KeyError(service_id)
 
+    def policy(self, policy_id: str) -> Policy:
+        for p in self.policies:
+            if p.id == policy_id:
+                return p
+        raise KeyError(policy_id)
+
     def staff_for(self, service_id: str) -> list[Staff]:
         return [m for m in self.staff if service_id in m.services]
 

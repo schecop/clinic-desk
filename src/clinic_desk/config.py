@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,8 +26,22 @@ class ModelChoice(_Strict):
     usd_per_mtok_out: Decimal = Field(ge=0)
 
 
+class ReceptionistSettings(_Strict):
+    """How the receptionist gets the clinic's policies (both are evaluated by the simulator).
+
+    prompt: every policy, both languages, in the fixed (cached) prompt. The default: with 10
+    policies, retrieval misses cost more than ~1.5k cached tokens (docs/adr/0003).
+    search: a `search_policies` tool over `retriever`: "bm25" (local, free) or an OpenAI
+    embedding model name such as "text-embedding-3-small" (paid, one call per search).
+    """
+
+    policies: Literal["prompt", "search"] = "prompt"
+    retriever: str = "bm25"
+
+
 class AppConfig(_Strict):
     llm: dict[str, ModelChoice]
+    receptionist: ReceptionistSettings = ReceptionistSettings()
 
 
 def load_config(path: Path = Path("config/local.yaml")) -> AppConfig:

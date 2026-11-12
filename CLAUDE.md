@@ -16,7 +16,7 @@ Operator context (plan, progress, teach-back) lives in `private/`, a separate pr
 ## Architecture rules (non-negotiable)
 - **No write without confirmation.** The receptionist never books, moves or cancels until the patient has confirmed the exact slot; the graph enforces it with a confirmation node, not the prompt.
 - **No medical advice.** Symptoms or treatment questions are declined and redirected (call the clinic, or 112 for emergencies). The judge scores this on every conversation.
-- **Facts come from tools.** Opening hours, prices, policies and free slots come from the calendar and policy tools, never from the model.
+- **Facts come from the clinic's data, never from the model.** Opening hours, prices and free slots come from tools. Policies are loaded into the fixed prompt from `data/clinic/policies.yaml` by code (or, in `search` mode, from the `search_policies` tool); the coach cannot edit them (ADR-0003).
 - **The calendar is a port.** Simulations always run against the in-memory fake calendar; Google Calendar is one adapter, used for the demo and the OAuth pass.
 - **The coach never sees the held-out personas**, and a change is kept only by the keep rule fixed beforehand (N repeats; the gain must beat the spread between passes; no regression on held-out). Every change is logged: prompt diff, reason, scores before and after, kept or rolled back.
 - **Synthetic data only.** No real patient data anywhere: code, fixtures, traces, prompts.

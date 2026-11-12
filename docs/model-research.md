@@ -160,6 +160,7 @@ Notes:
 
 - **Question set:** 20 hand-written questions (10 ES, 10 CA), colloquial, many with no keyword overlap with the policy text. Metrics: top-1 and top-3 hit rate.
 - **Decision rule, fixed beforehand:** if BM25 is within 1 question of the best embedding model, BM25 wins (simpler, no dependency).
+- **Measured (2026-11-12, `clinic-desk eval-retrieval`):** hit@1 BM25 11/20 (9/20 with a stem), word overlap 13/20, text-embedding-3-small 17/20 (hit@3 19/20; 2,155 tokens, ~$0.00004). BM25 loses by the rule. BGE-M3 not run. Default chosen: all policies in the prompt, retrieval kept as an option the simulator compares (ADR-0003).
 - **Privacy:** the policies are public clinic information; what would leave the machine with a hosted model is the patient's question. Local BM25 or BGE-M3 keep it local.
 - **Dropped:** *gemini-embedding* (covered by the two options above), *Qwen3-Embedding-0.6B* (Catalan not named).
 

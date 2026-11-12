@@ -1,0 +1,67 @@
+# Retrieval eval for `search_policies`: colloquial patient questions, 10 ES + 10 CA. Synthetic.
+# Written as a patient would say them, avoiding the policy's own words where a patient would
+# (no "penalización", "aseguradora", "RGPD"). `relevant`: the policy ids that answer it, best
+# first. A hit at k means any relevant id is in the top k.
+# The receptionist model writes the real query, and may rephrase it (or write it in Spanish for a
+# Catalan patient); patient wording is the harder case on purpose.
+
+- lang: es
+  q: Oye, si al final no puedo ir el jueves, ¿me cobráis algo?
+  relevant: [cancellation]
+- lang: es
+  q: Es la primera vez que voy, ¿qué tengo que llevar?
+  relevant: [first_visit]
+- lang: es
+  q: ¿Puedo pagar el tratamiento a plazos?
+  relevant: [payments]
+- lang: es
+  q: Tengo Sanitas, ¿me lo cubre?
+  relevant: [insurance]
+- lang: es
+  q: Se me ha partido un trozo de muela comiendo, ¿me podéis ver hoy?
+  relevant: [emergencies]
+- lang: es
+  q: ¿Qué me tomo para el dolor hasta que vaya?
+  relevant: [medical_advice]
+- lang: es
+  q: Mi hija tiene 14 años, ¿puede ir sola?
+  relevant: [minors]
+- lang: es
+  q: Voy en el autobús y llego como veinte minutos más tarde
+  relevant: [late_arrival]
+- lang: es
+  q: ¿Hay sitio para dejar el coche cerca?
+  relevant: [location]
+- lang: es
+  q: Llamo por mi madre, ¿me podéis decir qué le hicieron la semana pasada?
+  relevant: [privacy]
+- lang: ca
+  q: Si no em presento a la cita, què passa?
+  relevant: [cancellation]
+- lang: ca
+  q: És la primera vegada que vinc, quant em costarà?
+  relevant: [first_visit]
+- lang: ca
+  q: Puc pagar amb Bizum?
+  relevant: [payments]
+- lang: ca
+  q: Tinc mútua, m'ho paguen ells?
+  relevant: [insurance]
+- lang: ca
+  q: Tinc la cara molt inflada i em costa empassar
+  relevant: [emergencies, medical_advice]
+- lang: ca
+  q: Quin antibiòtic em puc prendre?
+  relevant: [medical_advice]
+- lang: ca
+  q: El meu fill té 5 anys, el podeu visitar?
+  relevant: [minors]
+- lang: ca
+  q: Faig tard, arribaré cap a dos quarts d'onze
+  relevant: [late_arrival]
+- lang: ca
+  q: Vaig amb cadira de rodes, hi puc entrar?
+  relevant: [location]
+- lang: ca
+  q: Per què em demaneu el DNI? No m'agrada donar les meves dades
+  relevant: [privacy, first_visit]

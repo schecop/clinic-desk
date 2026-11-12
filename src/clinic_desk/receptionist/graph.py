@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 from langgraph.graph import START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from clinic_desk.clinic import Lang, load_clinic
+from clinic_desk.clinic import Clinic, Lang, load_clinic
 from clinic_desk.llm.base import AssistantMessage, LLMClient, ToolResults, UserMessage
 from clinic_desk.receptionist.language import (
     classify_confirmation,
@@ -34,8 +34,9 @@ from clinic_desk.receptionist.language import (
     with_staff,
 )
 from clinic_desk.receptionist.state import Desk, Outcome, PendingAction, State, new_state
-from clinic_desk.receptionist.tools import SPECS, run_tool
+from clinic_desk.receptionist.tools import run_tool, specs_for
 from clinic_desk.receptionist.translate import LangFix, needs_translation, translate
+from clinic_desk.retrieval import BM25, Retriever, chunks_from
 from clinic_desk.scheduling.fake import load_seed
 from clinic_desk.scheduling.models import Appointment
 from clinic_desk.scheduling.scheduler import Scheduler, SchedulingError
@@ -98,6 +99,24 @@ def confirmation_question(desk: Desk, pending: PendingAction, lang: Lang) -> str
         f"Per confirmar: anul·lo la seva cita de {what} {staff} del {old}. "
         "Hi està d'acord? Respongui sí o no."
     )
+
+
+def policies_block(clinic: Clinic) -> str:
+    """Every policy in both languages, for the fixed part of the prompt (policies mode "prompt").
+
+    Built from the clinic's data, not written in `prompts/`: these are facts, and the coach edits
+    only the receptionist's instructions. Both languages, so a language switch does not change
+    the prompt and break its cache.
+    """
+    lines = [
+        "# Clinic policies",
+        "The clinic's own policies, in Spanish and Catalan. Answer policy questions only from"
+        " here, in the patient's language, and say only what they state.",
+    ]
+    for p in clinic.policies:
+        lines += ["", f"## {p.id}"]
+        lines += [f"- {lang}: {p.title.get(lang)}. {p.body.get(lang)}" for lang in clinic.languages]
+    return "\n".join(lines)
 
 
 def _describe(desk: Desk, a: Appointment) -> str:
@@ -175,6 +194,12 @@ def context_block(desk: Desk, state: State) -> str:
 
 
 def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
+    # the fixed part first, identical on every call (cacheable); the per-turn context after it
+    fixed_prompt = desk.prompt
+    if desk.policies == "prompt":
+        fixed_prompt += "\n\n" + policies_block(desk.clinic)
+    specs = specs_for(desk)
+
     async def agent(state: State) -> dict[str, Any]:
         if state["steps"] >= desk.max_steps:
             text = HANDOFF[state["lang"]].format(phone=desk.clinic.phone)
@@ -183,9 +208,9 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
                 "replies": [*state["replies"], text],
             }
         response = await desk.llm.complete(
-            system=f"{desk.prompt}\n\n{context_block(desk, state)}",
+            system=f"{fixed_prompt}\n\n{context_block(desk, state)}",
             messages=state["messages"],
-            tools=SPECS,
+            tools=specs,
             max_tokens=desk.max_tokens,
         )
         message = response.message
@@ -342,9 +367,16 @@ def make_desk(
     clock: Callable[[], datetime],
     prompt: str | None = None,
     translator: LLMClient | None = None,
+    policies: Literal["prompt", "search"] = "prompt",
+    retriever: Retriever | None = None,
 ) -> Desk:
-    """A desk on the seeded fake calendar: what tests, the CLI and the simulator use."""
+    """A desk on the seeded fake calendar: what tests, the CLI and the simulator use.
+
+    In search mode without a retriever, BM25 (local, free): tests never call an embedding API.
+    """
     clinic = load_clinic()
+    if policies == "search" and retriever is None:
+        retriever = BM25(chunks_from(clinic))
     patients, store = load_seed(clinic)
     return Desk(
         clinic=clinic,
@@ -354,4 +386,6 @@ def make_desk(
         prompt=prompt if prompt is not None else load_prompt(),
         clock=clock,
         translator=translator,
+        policies=policies,
+        retriever=retriever,
     )
