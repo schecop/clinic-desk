@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: aina-cancel-extraction
+category: cancel
+caller: { id: p05, name: Aina Serra, phone: "600 000 005" }
+goal: Anul·lar l'extracció del dilluns 16. No vol una altra hora de moment.
+traits: [breu, decidida]
+language: { start: ca }
+expect:
+  calendar: { cancelled: A001 }
+judge:
+  - No parla de cap penalització (falten més de 24 hores) o diu que és gratuït.
+  - No insisteix a donar una altra hora si la pacient diu que no.

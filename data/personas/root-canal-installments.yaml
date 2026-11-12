@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: root-canal-installments
+category: policy
+caller: { id: p04, name: Javier Ruiz, phone: "600 000 004" }
+goal: Saber cuánto cuesta una endodoncia y si la puede pagar a plazos. No pide cita en esta llamada.
+traits: [preocupado por el dinero, pregunta dos veces lo mismo]
+language: { start: es }
+expect:
+  calendar: { unchanged: true }
+judge:
+  - Da el precio correcto (250 €).
+  - Explica que solo se fraccionan tratamientos de más de 300 €, así que este no.

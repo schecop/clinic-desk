@@ -59,6 +59,10 @@ class InMemoryStore:
             raise KeyError(appointment.id)
         self._by_id[appointment.id] = appointment
 
+    def snapshot(self) -> dict[str, Appointment]:
+        """Every appointment, cancelled ones included: the simulator diffs two of these."""
+        return dict(self._by_id)
+
 
 class PatientDirectory:
     """Patients the clinic knows, looked up by phone. New patients are registered on booking."""

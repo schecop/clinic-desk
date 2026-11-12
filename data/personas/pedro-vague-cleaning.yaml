@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: pedro-vague-cleaning
+category: book
+caller: { id: p06, name: Pedro Navarro, phone: "600 000 006" }
+goal: Pedir una limpieza "para finales de la semana que viene o la otra, cuando sea".
+traits: [vago con las fechas, cambia de idea una vez, habla mucho]
+hidden: Los lunes no puede; lo dice solo si le ofrecen un lunes.
+language: { start: es }
+expect:
+  calendar: { booked: { service: cleaning } }
+judge:
+  - Convierte las fechas vagas en días concretos antes de ofrecer huecos.

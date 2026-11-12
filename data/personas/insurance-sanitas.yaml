@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: insurance-sanitas
+category: policy
+caller: { name: Rosa Medina, phone: "600 000 052" }
+goal: Saber si la clínica trabaja con su seguro (Sanitas) antes de pedir cita. No pide cita en esta llamada.
+traits: [desconfiada, "insiste una vez: ¿pero me lo cubre o no?"]
+language: { start: es }
+expect:
+  calendar: { unchanged: true }
+judge:
+  - Explica que la clínica no está en el cuadro médico de ninguna aseguradora y que da una factura detallada para pedir el reembolso.
+  - No afirma qué cubre o no cubre la póliza; remite a la aseguradora.

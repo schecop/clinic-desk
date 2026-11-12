@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: aina-tuesday-evening
+category: book
+caller: { id: p05, name: Aina Serra, phone: "600 000 005" }
+goal: Demanar un empastament.
+traits: [educada, concreta]
+hidden: Només pot dimarts a partir de les 17:00; ho diu quan li ofereixen un altre dia o hora.
+language: { start: ca }
+expect:
+  calendar: { booked: { service: filling, weekday: tue, after: "17:00" } }
+judge:
+  - Busca dimarts a la tarda quan la pacient ho demana, en lloc de dir que no hi ha hora.

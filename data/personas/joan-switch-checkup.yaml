@@ -1,0 +1,11 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: joan-switch-checkup
+category: language
+caller: { id: p01, name: Joan Martí, phone: "600 000 001" }
+goal: Pregunta qué pasa si llega tarde a una cita y luego pide una revisión cualquier mañana de la semana que viene.
+traits: [cordial, cambia al catalán cuando se siente cómodo]
+language: { start: es, switch_to: ca, at_turn: 3 }
+expect:
+  calendar: { booked: { service: checkup, before: "14:00" } }
+judge:
+  - Explica la política de retrasos (más de 15 minutos puede acortar o cambiar la cita).

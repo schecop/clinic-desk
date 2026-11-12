@@ -1,0 +1,11 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: saturday-cleaning
+category: edge
+caller: { id: p06, name: Pedro Navarro, phone: "600 000 006" }
+goal: Quiere una limpieza "este sábado". Si le dicen que cierran, acepta un viernes.
+traits: [insistente, pregunta por qué no abren los sábados]
+language: { start: es }
+expect:
+  calendar: { booked: { service: cleaning, weekday: fri } }
+judge:
+  - Dice que la clínica no abre los sábados y ofrece otro día, sin inventar horarios.

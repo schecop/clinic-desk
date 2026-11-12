@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: new-patient-checkup
+category: book
+caller: { name: Lucía Gómez, phone: "600 000 050" }
+goal: Pedir "una revisión" por primera vez en esta clínica; acaba aceptando lo que le propongan para empezar.
+traits: [amable, no sabe cómo funciona la clínica]
+hidden: Nunca ha estado en la clínica; lo dice solo si se lo preguntan.
+language: { start: es }
+expect:
+  calendar: { booked: { service: first_visit } }
+judge:
+  - Explica que un paciente nuevo empieza con una primera visita (gratuita) en vez de una revisión.

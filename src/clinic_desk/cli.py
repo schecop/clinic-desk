@@ -13,6 +13,7 @@ import asyncio
 import json
 import time
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -28,6 +29,10 @@ from clinic_desk.receptionist.state import State
 from clinic_desk.retrieval import BM25, Overlap, Retriever, chunks_from
 from clinic_desk.retrieval.dense import Dense, cached, openai_embedder
 from clinic_desk.retrieval.evaluate import all_in_prompt_tokens, evaluate, load_questions, report
+from clinic_desk.simulator import budget
+from clinic_desk.simulator.persona import load_personas, load_split
+from clinic_desk.simulator.runner import RoleModel
+from clinic_desk.simulator.simulate import new_run_id, run_pass, summary
 
 DEFAULT_NOW = "2026-11-11T10:00"
 
@@ -139,6 +144,54 @@ async def eval_retrieval(embeddings: list[str]) -> None:
         print(f"embedding tokens billed this run: {sum(usage)} (0 = all cached)")
 
 
+async def simulate(
+    split: str, only: list[str], repeats: int, concurrency: int, label: str, yes: bool
+) -> None:
+    """Print the estimate and the budget line; run only with --yes when it costs money."""
+    load_env()
+    roles = load_config().llm
+    if "persona" not in roles:
+        raise SystemExit("config: add an llm.persona role (see config/example.yaml)")
+    personas = load_personas(load_clinic())
+    if only:
+        personas = [p for p in personas if p.id in only]
+    elif split != "all":
+        keep = set(load_split()[split])
+        personas = [p for p in personas if p.id in keep]
+    if not personas:
+        raise SystemExit("no personas selected")
+    used = ["receptionist", "persona"] + (["translator"] if "translator" in roles else [])
+    prices = {r: (roles[r].usd_per_mtok_in, roles[r].usd_per_mtok_out) for r in used}
+    if "translator" not in roles:  # the receptionist's model translates
+        prices["translator"] = prices["receptionist"]
+    planned = budget.estimate(len(personas) * repeats, prices)
+    print(f"{len(personas)} personas x {repeats} repeats · estimate ~${planned:.4f}")
+    print(budget.check(planned))
+    if planned > 0 and not yes:
+        raise SystemExit("not started: this run costs money; re-run with --yes")
+
+    def role(name: str) -> RoleModel:
+        c = roles[name]
+        return RoleModel(build_llm(c), c.usd_per_mtok_in, c.usd_per_mtok_out)
+
+    models = {name: role(name) for name in used}
+    try:
+        run_id, conversations = await run_pass(
+            personas,
+            receptionist=models["receptionist"],
+            persona_model=models["persona"],
+            translator=models.get("translator"),
+            repeats=repeats,
+            concurrency=concurrency,
+            run_id=new_run_id(label),
+        )
+    finally:
+        for m in models.values():
+            await m.client.aclose()
+    print(summary(run_id, conversations))
+    print(f"\nsaved to runs/sim/{run_id}/ · {budget.check(Decimal(0))}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="clinic-desk")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -154,7 +207,18 @@ def main() -> None:
         metavar="MODEL",
         help="also an OpenAI embedding model (paid, cached in runs/embeddings/)",
     )
+    sim = sub.add_parser("simulate", help="a simulator pass (real models from config; paid)")
+    sim.add_argument("--split", choices=["visible", "held_out", "all"], default="visible")
+    sim.add_argument("--persona", action="append", default=[], help="only these persona ids")
+    sim.add_argument("--repeats", type=int, default=1)
+    sim.add_argument("--concurrency", type=int, default=4)
+    sim.add_argument("--label", default="", help="suffix for the run id")
+    sim.add_argument("--yes", action="store_true", help="run even though it costs money")
     args = parser.parse_args()
+    if args.command == "simulate":
+        asyncio.run(
+            simulate(args.split, args.persona, args.repeats, args.concurrency, args.label, args.yes)
+        )
     if args.command == "eval-retrieval":
         asyncio.run(eval_retrieval(args.embeddings))
     if args.command == "chat":

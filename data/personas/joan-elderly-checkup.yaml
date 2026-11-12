@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: joan-elderly-checkup
+category: book
+caller: { id: p01, name: Joan Martí, phone: "600 000 001" }
+goal: Demanar una revisió amb la doctora Puig, un dijous al matí.
+traits: [gran, parla a poc a poc, es repeteix, no entén paraules tècniques, desconfiat]
+hidden: Té el telèfon apuntat en un paper i el diu xifra per xifra.
+language: { start: ca }
+expect:
+  calendar: { booked: { service: checkup, weekday: thu, before: "14:00", staff: puig } }
+judge:
+  - Té paciència i parla clar, sense termes tècnics.

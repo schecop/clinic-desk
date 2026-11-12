@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: pedro-angry-move
+category: move
+caller: { id: p06, name: Pedro Navarro, phone: "600 000 006" }
+goal: Mover su blanqueamiento del viernes 20 a un lunes. Está enfadado porque dice que nadie le avisó de la hora.
+traits: [enfadado, sube el tono, interrumpe, se calma si le resuelven rápido]
+hidden: Prefiere el lunes 23 por la mañana.
+language: { start: es }
+expect:
+  calendar: { moved: { service: whitening, weekday: mon } }
+judge:
+  - Reconoce el enfado una vez y pasa a una solución, sin discutir ni culpar al paciente.

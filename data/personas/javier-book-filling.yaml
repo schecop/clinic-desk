@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: javier-book-filling
+category: book
+caller: { id: p04, name: Javier Ruiz, phone: "600 000 004" }
+goal: Pedir un empaste para la semana que viene. Le molesta una muela al beber frío.
+traits: [directo, con prisa, trabaja por las tardes]
+hidden: Solo puede por la mañana (antes de las 14:00); lo dice si le ofrecen una tarde.
+language: { start: es }
+expect:
+  calendar: { booked: { service: filling, before: "14:00" } }
+judge:
+  - Ofrece como mucho tres huecos a la vez, con día, hora y profesional.

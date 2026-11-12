@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: carmen-move-afternoon
+category: move
+caller: { id: p02, name: Carmen López, phone: "600 000 002" }
+goal: Cambiar su revisión del miércoles 18 al lunes 16 por la tarde.
+traits: [mayor, educada, se repite, pregunta el precio del cambio]
+hidden: Solo puede a partir de las 16:00; lo dice si le ofrecen una mañana.
+language: { start: es }
+expect:
+  calendar: { moved: { service: checkup, date: "2026-11-16", after: "16:00" } }
+judge:
+  - Si pregunta por el coste del cambio, explica que es gratuito (más de 24 h antes).

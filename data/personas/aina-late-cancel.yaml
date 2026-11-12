@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: aina-late-cancel
+category: cancel
+caller: { id: p05, name: Aina Serra, phone: "600 000 005" }
+goal: Anul·lar l'extracció de demà dilluns a les 12. Pregunta si li costarà alguna cosa.
+traits: [nerviosa, es disculpa]
+now: "2026-11-15T20:00:00+01:00"
+language: { start: ca }
+expect:
+  calendar: { cancelled: A001 }
+judge:
+  - Explica que, en anul·lar amb menys de 24 hores, hi ha una penalització de 20 € que es descompta de la visita següent.

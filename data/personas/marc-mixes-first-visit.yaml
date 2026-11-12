@@ -1,0 +1,11 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: marc-mixes-first-visit
+category: language
+caller: { name: Marc Pujol, phone: "600 000 054" }
+goal: Demanar una primera visita. Barreja català i castellà a cada frase.
+traits: [jove, informal, barreja idiomes]
+language: { start: ca, mixes: true }
+expect:
+  calendar: { booked: { service: first_visit } }
+judge:
+  - Respon en un sol idioma coherent (el del pacient), sense barrejar-los.

@@ -14,7 +14,7 @@ from clinic_desk.llm.base import LLMClient, Message
 from clinic_desk.receptionist.language import Confirmation
 from clinic_desk.receptionist.translate import LangFix
 from clinic_desk.retrieval.base import Retriever
-from clinic_desk.scheduling.fake import PatientDirectory
+from clinic_desk.scheduling.fake import InMemoryStore, PatientDirectory
 from clinic_desk.scheduling.models import Appointment, Slot
 from clinic_desk.scheduling.scheduler import Scheduler
 
@@ -87,3 +87,4 @@ class Desk:
     # how policies reach the model: all in the prompt, or a search_policies tool (ADR-0003)
     policies: Literal["prompt", "search"] = "prompt"
     retriever: Retriever | None = None  # search mode only; make_desk defaults it to BM25
+    store: InMemoryStore | None = None  # the fake calendar, for the simulator's before/after diff

@@ -1,0 +1,12 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: montserrat-move-ortho
+category: move
+caller: { id: p03, name: Montserrat Vila, phone: "600 000 003" }
+goal: Canviar la revisió d'ortodòncia del dijous 19 a la setmana següent.
+traits: [eficient, té pressa, interromp]
+hidden: Només pot a la tarda (a partir de les 16:00), perquè treballa al matí.
+language: { start: ca }
+expect:
+  calendar: { moved: { service: ortho_review, after: "16:00" } }
+judge:
+  - Manté el mateix professional (ortodontista) en proposar el canvi.

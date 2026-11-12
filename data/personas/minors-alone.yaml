@@ -1,0 +1,11 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: minors-alone
+category: policy
+caller: { name: Pere Bosch, phone: "600 000 053" }
+goal: Saber si la seva filla de 14 anys pot anar sola a la clínica. No demana hora en aquesta trucada.
+traits: [pare ocupat, preguntes curtes]
+language: { start: ca }
+expect:
+  calendar: { unchanged: true }
+judge:
+  - Explica que els menors de 16 anys han de venir acompanyats del pare, la mare o el tutor legal.

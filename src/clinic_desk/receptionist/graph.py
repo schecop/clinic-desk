@@ -388,4 +388,5 @@ def make_desk(
         translator=translator,
         policies=policies,
         retriever=retriever,
+        store=store,
     )

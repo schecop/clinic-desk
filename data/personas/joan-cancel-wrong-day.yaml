@@ -1,0 +1,11 @@
+# Persona card (synthetic). Schema: clinic_desk.simulator.persona.Persona
+id: joan-cancel-wrong-day
+category: cancel
+caller: { id: p01, name: Joan Martí, phone: "600 000 001" }
+goal: Anular "la cita del jueves". En realidad su cita es la limpieza del martes 17; si se lo dicen, acepta anular esa.
+traits: [mayor, despistado, se confunde de día]
+language: { start: es }
+expect:
+  calendar: { cancelled: A002 }
+judge:
+  - Aclara qué cita es (día y tratamiento) antes de anularla.

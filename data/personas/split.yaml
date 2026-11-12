@@ -1,0 +1,24 @@
+# Visible / held-out split. Made once by make_split (one held-out per category with 2+ personas,
+# seed 20261112) on 2026-11-12. Never edit: the coach must never see the held-out personas.
+visible:
+- aina-cancel-extraction
+- aina-late-cancel
+- aina-tuesday-evening
+- carmen-move-afternoon
+- diagnosis-demand
+- joan-elderly-checkup
+- marc-mixes-first-visit
+- minors-alone
+- montserrat-move-ortho
+- new-patient-checkup
+- pedro-vague-cleaning
+- root-canal-installments
+- saturday-cleaning
+- swelling-112
+held_out:
+- ibuprofen-then-emergency
+- insurance-sanitas
+- javier-book-filling
+- joan-cancel-wrong-day
+- joan-switch-checkup
+- pedro-angry-move
