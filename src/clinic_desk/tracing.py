@@ -33,7 +33,7 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-AttrValue = str | int | float | bool
+AttrValue = str | int | float | bool | list[str]
 
 
 @dataclass
@@ -51,6 +51,11 @@ class Span:
         """Dotted OTel names come in with "__" for "." (gen_ai__usage__input_tokens)."""
         for key, value in attributes.items():
             self.attributes[key.replace("__", ".")] = _attr(value)
+
+    def set_many(self, attributes: dict[str, Any]) -> None:
+        """Attributes by their real dotted names (`langfuse.observation.type`)."""
+        for key, value in attributes.items():
+            self.attributes[key] = _attr(value)
 
 
 class Trace:
@@ -82,6 +87,16 @@ class Trace:
             raise
         finally:
             span.end_ns = time.time_ns()
+
+    def add(
+        self, name: str, parent: Span | None, start_ns: int, end_ns: int, attributes: dict[str, Any]
+    ) -> Span:
+        """A span recorded after the fact, with its real times (the simulator builds the whole
+        trace when a conversation ends, from what it timed along the way)."""
+        span = self._start(name, parent or self.root)
+        span.start_ns, span.end_ns = start_ns, end_ns
+        span.set_many(attributes)
+        return span
 
     def finish(self, **attributes: Any) -> None:
         self.root.set(**attributes)
@@ -146,6 +161,8 @@ class LangfuseExporter:
 def _attr(value: Any) -> AttrValue:
     if isinstance(value, str | bool | int | float):
         return value
+    if isinstance(value, tuple):  # a tuple of strings: an OTel string array (trace tags)
+        return [str(v) for v in value]
     return json.dumps(value, default=str)  # dicts, lists, Decimals: as JSON text
 
 
@@ -159,7 +176,11 @@ def _kv(attributes: dict[str, AttrValue]) -> list[dict[str, Any]]:
         elif isinstance(value, float):
             v = {"doubleValue": value}
         else:
-            v = {"stringValue": value}
+            v = (
+                {"arrayValue": {"values": [{"stringValue": s} for s in value]}}
+                if isinstance(value, list)
+                else {"stringValue": value}
+            )
         out.append({"key": key, "value": v})
     return out
 

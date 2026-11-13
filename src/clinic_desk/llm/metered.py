@@ -1,19 +1,31 @@
-"""An `LLMClient` wrapper that records every call: role, model, tokens, cost, latency.
+"""An `LLMClient` wrapper that records every call: role, model, tokens, cost, latency, and what
+went in and came out (abridged).
 
 The simulator wraps each role's client (receptionist, translator, persona, judge) with one, so a
-conversation knows what it cost and how slow it was, and the cost ledger and the traces read the
-same records. Prices come from config (`usd_per_mtok_in/out`), never from code.
+conversation knows what it cost and how slow it was; the cost ledger and the Langfuse traces read
+the same records. Prices come from config (`usd_per_mtok_in/out`), never from code.
 """
 
 from __future__ import annotations
 
+import json
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
-from clinic_desk.llm.base import LLMClient, LLMResponse, Message, ToolSpec
+from clinic_desk.llm.base import (
+    AssistantMessage,
+    LLMClient,
+    LLMResponse,
+    Message,
+    ToolResults,
+    ToolSpec,
+    UserMessage,
+)
 
 MTOK = Decimal(1_000_000)
+ABRIDGE = 2000  # characters kept of a call's input and output, for traces
 
 
 @dataclass(frozen=True)
@@ -26,6 +38,25 @@ class Call:
     usd: Decimal
     latency_ms: float
     stop: str
+    start_ns: int = 0
+    end_ns: int = 0
+    input: str = ""  # the last message the model saw (the system prompt is not repeated)
+    output: str = ""  # its text, or the tool calls it made
+
+
+def describe(message: Message) -> str:
+    if isinstance(message, UserMessage):
+        return message.content
+    if isinstance(message, ToolResults):
+        return "\n".join(f"{r.name} -> {r.content}" for r in message.results)
+    return answer(message)
+
+
+def answer(message: AssistantMessage) -> str:
+    calls = [{"tool": c.name, "arguments": c.arguments} for c in message.tool_calls]
+    if not calls:
+        return message.text
+    return (message.text + "\n" if message.text else "") + json.dumps(calls, ensure_ascii=False)
 
 
 class Metered:
@@ -52,6 +83,7 @@ class Metered:
         tools: Sequence[ToolSpec] = (),
         max_tokens: int = 1024,
     ) -> LLMResponse:
+        start = time.time_ns()
         response = await self.inner.complete(
             system=system, messages=messages, tools=tools, max_tokens=max_tokens
         )
@@ -66,6 +98,10 @@ class Metered:
                 usd,
                 response.latency_ms,
                 response.stop,
+                start_ns=start,
+                end_ns=time.time_ns(),
+                input=describe(messages[-1])[:ABRIDGE] if messages else "",
+                output=answer(response.message)[:ABRIDGE],
             )
         )
         return response

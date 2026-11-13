@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict
 
@@ -88,3 +88,16 @@ class Desk:
     policies: Literal["prompt", "search"] = "prompt"
     retriever: Retriever | None = None  # search mode only; make_desk defaults it to BM25
     store: InMemoryStore | None = None  # the fake calendar, for the simulator's before/after diff
+    tool_log: list[ToolEvent] | None = None  # set by the simulator: every tool call, timed
+
+
+@dataclass(frozen=True)
+class ToolEvent:
+    """One tool call as it ran: for traces (a tool span) and for the judge (the tool log)."""
+
+    name: str
+    arguments: dict[str, Any]
+    result: str
+    is_error: bool
+    start_ns: int
+    end_ns: int

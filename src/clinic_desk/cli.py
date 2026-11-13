@@ -32,7 +32,8 @@ from clinic_desk.retrieval.evaluate import all_in_prompt_tokens, evaluate, load_
 from clinic_desk.simulator import budget
 from clinic_desk.simulator.persona import load_personas, load_split
 from clinic_desk.simulator.runner import RoleModel
-from clinic_desk.simulator.simulate import new_run_id, run_pass, summary
+from clinic_desk.simulator.simulate import langfuse_trace_url, new_run_id, run_pass, summary
+from clinic_desk.tracing import LangfuseExporter
 
 DEFAULT_NOW = "2026-11-11T10:00"
 
@@ -175,6 +176,9 @@ async def simulate(
         return RoleModel(build_llm(c), c.usd_per_mtok_in, c.usd_per_mtok_out)
 
     models = {name: role(name) for name in used}
+    exporter = LangfuseExporter.from_env()
+    print("traces: Langfuse" if exporter else "traces: off (no LANGFUSE_* keys in .env)")
+    split_of = {pid: name for name, ids in load_split().items() for pid in ids}
     try:
         run_id, conversations = await run_pass(
             personas,
@@ -184,11 +188,15 @@ async def simulate(
             repeats=repeats,
             concurrency=concurrency,
             run_id=new_run_id(label),
+            exporter=exporter,
+            split_of=split_of,
         )
     finally:
         for m in models.values():
             await m.client.aclose()
-    print(summary(run_id, conversations))
+        if exporter is not None:
+            await exporter.aclose()
+    print(summary(run_id, conversations, langfuse_trace_url()))
     print(f"\nsaved to runs/sim/{run_id}/ · {budget.check(Decimal(0))}")
 
 

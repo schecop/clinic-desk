@@ -11,6 +11,13 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Regression guard:**
 -->
 
+## 2026-11-12 · "Queda anul·lada" one turn before it was
+- **Symptom:** Aina (Catalan) answered the cancel confirmation with "El meu número és el 600 00 00 00 5. I sí, estic d'acord." The receptionist replied "La seva cita del dilluns 16 de novembre queda anul·lada", then the graph's template asked for confirmation again. The cancellation was written only on the next turn, after a plain "Sí".
+- **Found by:** the simulator's false-claim check (`FALSE CLAIM` on turn 4) in a real pass (Gemma 4 patient, Haiku receptionist). The calendar check passed: only the code check on the reply caught it.
+- **Root cause (class):** model. The reply held digits, so `classify_confirmation` said unclear (the safe call) and the proposal was kept. Haiku 5.5 then claimed the write anyway, against the context block ("NOT confirmed and NOT written… Never say it is done"). Same class as the D2 Carmen failure; the gate held both times, the words did not.
+- **Fix:** pending a decision (Pablo): a code guard on the reply while a proposal is pending, or leave it to the coach as a target.
+- **Regression guard:** the false-claim check runs on every simulated turn.
+
 ## 2026-11-12 · The simulator blamed the receptionist for its own bug
 - **Symptom:** first real pass (3 personas, Gemma 4 as patient, Haiku as receptionist): code pass 1/3. Carmen's move and Marc's first visit were never written, so `calendar: False`.
 - **Found by:** reading the transcripts before trusting the score. Both patients answered the confirmation with "Sí, estoy de acuerdo. Muchas gracias, adiós. [DONE]" in one turn.

@@ -15,6 +15,7 @@ pending slot.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -34,7 +35,14 @@ from clinic_desk.receptionist.language import (
     when,
     with_staff,
 )
-from clinic_desk.receptionist.state import Desk, Outcome, PendingAction, State, new_state
+from clinic_desk.receptionist.state import (
+    Desk,
+    Outcome,
+    PendingAction,
+    State,
+    ToolEvent,
+    new_state,
+)
 from clinic_desk.receptionist.tools import run_tool, specs_for
 from clinic_desk.receptionist.translate import LangFix, needs_translation, translate
 from clinic_desk.retrieval import BM25, Retriever, chunks_from
@@ -243,7 +251,19 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
         before = state["pending"]
         results = []
         for call in last.tool_calls:
+            start = time.time_ns()
             result, updates = await run_tool(desk, current, call)
+            if desk.tool_log is not None:
+                desk.tool_log.append(
+                    ToolEvent(
+                        call.name,
+                        call.arguments,
+                        result.content,
+                        result.is_error,
+                        start,
+                        time.time_ns(),
+                    )
+                )
             results.append(result)
             current = {**current, **updates}  # type: ignore[typeddict-item]
         return {

@@ -27,6 +27,7 @@ from clinic_desk.llm.base import LLMClient, Message, UserMessage
 from clinic_desk.llm.metered import Call, Metered
 from clinic_desk.receptionist.graph import Receptionist, make_desk
 from clinic_desk.receptionist.language import clear_lang
+from clinic_desk.receptionist.state import ToolEvent
 from clinic_desk.retrieval.base import Retriever
 from clinic_desk.simulator.checks import (
     changes,
@@ -67,6 +68,8 @@ class Turn(BaseModel):
     false_claim: bool = False  # says done, and nothing has been written so far
     reply_lang_ok: bool = True
     persona_lang_ok: bool = True
+    start_ns: int = 0  # from the persona's call to the receptionist's reply (for traces)
+    end_ns: int = 0
 
 
 class Conversation(BaseModel):
@@ -79,6 +82,8 @@ class Conversation(BaseModel):
     calendar_why: str = ""
     error: str | None = None
     calls: list[Call] = []
+    tools: list[ToolEvent] = []  # the receptionist's tool calls, in order (for the judge too)
+    trace_id: str | None = None  # Langfuse trace, when exported
 
     @property
     def usd(self) -> Decimal:
@@ -160,6 +165,7 @@ async def run_conversation(
         retriever=retriever,
     )
     assert desk.store is not None
+    desk.tool_log = []
     tz = ZoneInfo(desk.clinic.timezone)
     before = desk.store.snapshot()
     desk_side = Receptionist(desk, persona.language.start)
@@ -172,6 +178,7 @@ async def run_conversation(
     written_so_far = False
 
     for n in range(1, persona.max_turns + 1):
+        turn_start = time.time_ns()
         try:
             for _ in range(2):  # an empty line (reasoning cut by max_tokens) gets one retry
                 response = await patient.complete(
@@ -186,14 +193,22 @@ async def run_conversation(
         marker = _END.search(said)
         said = _END.sub("", said).strip()
         if persona_broke(said) and not marker:
-            turns.append(Turn(n=n, patient=said))
+            turns.append(Turn(n=n, start_ns=turn_start, end_ns=time.time_ns(), patient=said))
             end = "simulator_failure"
             break
         found = clear_lang(said)
         plan = persona.language
         persona_lang_ok = plan.mixes or found in (None, plan.expected(n))
         if marker and not said:
-            turns.append(Turn(n=n, patient=said, persona_lang_ok=persona_lang_ok))
+            turns.append(
+                Turn(
+                    n=n,
+                    start_ns=turn_start,
+                    end_ns=time.time_ns(),
+                    patient=said,
+                    persona_lang_ok=persona_lang_ok,
+                )
+            )
             end = "done" if marker.group(1) == "DONE" else "hangup"
             break
         # a line that ends the call still reaches the receptionist: "Sí, de acuerdo, adiós
@@ -205,7 +220,15 @@ async def run_conversation(
         try:
             reply = await desk_side.reply(said)
         except Exception as exc:  # a crash is a finding, not a reason to lose the pass
-            turns.append(Turn(n=n, patient=said, persona_lang_ok=persona_lang_ok))
+            turns.append(
+                Turn(
+                    n=n,
+                    start_ns=turn_start,
+                    end_ns=time.time_ns(),
+                    patient=said,
+                    persona_lang_ok=persona_lang_ok,
+                )
+            )
             end, error = "error", f"receptionist: {type(exc).__name__}: {exc}"
             break
         writes = changes(snap, desk.store.snapshot())
@@ -214,6 +237,8 @@ async def run_conversation(
         turns.append(
             Turn(
                 n=n,
+                start_ns=turn_start,
+                end_ns=time.time_ns(),
                 patient=said,
                 desk=reply,
                 seconds=round(time.perf_counter() - started, 2),
@@ -246,6 +271,7 @@ async def run_conversation(
         calendar_why=why,
         error=error,
         calls=calls,
+        tools=desk.tool_log,
     )
 
 

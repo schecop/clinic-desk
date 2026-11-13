@@ -12,7 +12,7 @@ import pytest
 
 from clinic_desk.clinic import load_clinic
 from clinic_desk.llm.base import LLMResponse, ToolResults
-from clinic_desk.llm.scripted import Request, ScriptedLLM, call, say
+from clinic_desk.llm.scripted import Request, ScriptedLLM, Step, call, say
 from clinic_desk.simulator.checks import changes, check_calendar, claims_write, persona_broke
 from clinic_desk.simulator.persona import CalendarExpect, load_personas, load_split, make_split
 from clinic_desk.simulator.runner import RoleModel, persona_system, run_conversation, transcript
@@ -35,7 +35,7 @@ def first_afternoon_slot(req: Request) -> LLMResponse:
     raise AssertionError("no slots")
 
 
-CARMEN_DESK = [
+CARMEN_DESK: list[Step] = [
     call("identify_patient", phone="600 000 002"),
     say(
         "Buenos días, Carmen. Tiene una revisión el miércoles 18 a las 9:30. ¿A qué día la cambio?"
@@ -51,7 +51,7 @@ CARMEN_DESK = [
     say("Hecho: su revisión queda cambiada al lunes 16 a las 16:00 con el Dr. Roca."),
     say("A usted, adiós."),  # the goodbye that carries [DONE] still reaches the desk
 ]
-CARMEN_PATIENT = [
+CARMEN_PATIENT: list[Step] = [
     say("Hola, buenos días. Quería cambiar mi revisión. Mi teléfono es el 600 000 002."),
     say("Al lunes 16 por la tarde, si puede ser, a partir de las cuatro."),
     say("Sí"),

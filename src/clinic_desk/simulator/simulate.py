@@ -9,8 +9,10 @@ false claims, language misses, cost and receptionist latency per turn.
 from __future__ import annotations
 
 import asyncio
+import os
 import statistics
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -18,6 +20,8 @@ from pathlib import Path
 from clinic_desk.simulator import budget
 from clinic_desk.simulator.persona import Persona
 from clinic_desk.simulator.runner import Conversation, RoleModel, run_conversation, transcript
+from clinic_desk.simulator.traces import build_trace
+from clinic_desk.tracing import LangfuseExporter
 
 RUNS = Path("runs/sim")
 
@@ -37,6 +41,8 @@ async def run_pass(
     run_id: str | None = None,
     out: Path = RUNS,
     ledger: Path = budget.LEDGER,
+    exporter: LangfuseExporter | None = None,
+    split_of: dict[str, str] | None = None,  # persona id -> "visible" / "held_out", for tags
 ) -> tuple[str, list[Conversation]]:
     run_id = run_id or new_run_id()
     folder = out / run_id
@@ -52,6 +58,10 @@ async def run_pass(
                 translator=translator,
                 repeat=r,
             )
+        if exporter is not None:
+            trace = build_trace(c, run_id, (split_of or {}).get(p.id, ""))
+            if await exporter.export(trace):  # a failed export is logged, never fatal
+                c.trace_id = trace.trace_id
         stem = f"{p.id}.r{r}"
         (folder / f"{stem}.json").write_text(c.model_dump_json(indent=1), "utf-8")
         (folder / f"{stem}.txt").write_text(transcript(c) + "\n", "utf-8")
@@ -60,7 +70,8 @@ async def run_pass(
 
     jobs = [one(p, r) for p in personas for r in range(repeats)]
     conversations = list(await asyncio.gather(*jobs))
-    (folder / "summary.md").write_text(summary(run_id, conversations) + "\n", "utf-8")
+    text = summary(run_id, conversations, langfuse_trace_url())
+    (folder / "summary.md").write_text(text + "\n", "utf-8")
     return run_id, conversations
 
 
@@ -72,7 +83,11 @@ def _pct(values: list[float], q: float) -> float:
     return statistics.quantiles(values, n=100, method="inclusive")[int(q) - 1]
 
 
-def summary(run_id: str, conversations: list[Conversation]) -> str:
+def summary(
+    run_id: str,
+    conversations: list[Conversation],
+    trace_url: Callable[[str], str] | None = None,
+) -> str:
     counted = [c for c in conversations if c.counted]
     cost = sum((c.usd for c in conversations), Decimal(0))
     seconds = [t.seconds for c in conversations for t in c.turns if t.desk]
@@ -92,13 +107,26 @@ def summary(run_id: str, conversations: list[Conversation]) -> str:
         f"- Cost: ${cost:.4f} (${cost / max(len(conversations), 1):.4f} per conversation)",
         f"- Receptionist latency per turn: p50 {p50:.1f}s · p95 {p95:.1f}s",
         "",
-        "| persona | category | end | calendar | false claims | lang misses | turns | code pass |",
-        "|---|---|---|---|---|---|---|---|",
+        "| persona | category | end | calendar | false claims | lang misses | turns | code pass"
+        " | trace |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for c in sorted(conversations, key=lambda c: (c.persona_id, c.repeat)):
+        trace = "-"
+        if c.trace_id:
+            trace = f"[{c.trace_id[:8]}]({trace_url(c.trace_id)})" if trace_url else c.trace_id[:8]
         lines.append(
             f"| {c.persona_id} r{c.repeat} | {c.category} | {c.end} | {c.calendar_ok} |"
             f" {c.false_claims} | {c.language_misses} | {len(c.turns)} |"
-            f" {'✅' if c.code_pass else '❌'} |"
+            f" {'✅' if c.code_pass else '❌'} | {trace} |"
         )
     return "\n".join(lines)
+
+
+def langfuse_trace_url() -> Callable[[str], str] | None:
+    """Trace links need the project id (LANGFUSE_PROJECT_ID in .env, from the project's URL)."""
+    project = os.environ.get("LANGFUSE_PROJECT_ID")
+    if not project:
+        return None
+    host = (os.environ.get("LANGFUSE_HOST") or "https://cloud.langfuse.com").rstrip("/")
+    return lambda trace_id: f"{host}/project/{project}/traces/{trace_id}"
