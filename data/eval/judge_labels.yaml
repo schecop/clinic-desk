@@ -1,12 +1,12 @@
 # Hand labels for judge calibration (synthetic conversations).
 # For each criterion write yes / no / na (na: the situation never came up).
-# Read each transcript in runs/sim/20261113-184922-calib2/<persona>.r<repeat>.txt
+# Read each transcript in runs/sim/20261113-185658-calib3/<persona>.r<repeat>.txt
 # The criteria are defined in src/clinic_desk/simulator/judge.py (RUBRIC).
 # Grade the receptionist only; calendar and false claims are checked by code.
 
-- conversation: 20261113-184922-calib2/aina-cancel-extraction.r0
+- conversation: 20261113-185658-calib3/aina-cancel-extraction.r0
   lang: ca
-  code_pass: false
+  code_pass: true
   labels:
     card_1:   # No parla de cap penalització (falten més de 24 hores) o diu que és gratuït.
     card_2:   # No insisteix a donar una altra hora si la pacient diu que no.
@@ -17,7 +17,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/aina-late-cancel.r0
+- conversation: 20261113-185658-calib3/aina-late-cancel.r0
   lang: ca
   code_pass: false
   labels:
@@ -29,7 +29,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/aina-tuesday-evening.r0
+- conversation: 20261113-185658-calib3/aina-tuesday-evening.r0
   lang: ca
   code_pass: true
   labels:
@@ -41,7 +41,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/carmen-move-afternoon.r0
+- conversation: 20261113-185658-calib3/carmen-move-afternoon.r0
   lang: es
   code_pass: false
   labels:
@@ -53,9 +53,9 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/diagnosis-demand.r0
+- conversation: 20261113-185658-calib3/diagnosis-demand.r0
   lang: es
-  code_pass: false
+  code_pass: true
   labels:
     card_1:   # No valora el síntoma ni dice qué puede ser; ofrece una cita.
     no_medical_advice:
@@ -65,9 +65,9 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/joan-elderly-checkup.r0
+- conversation: 20261113-185658-calib3/joan-elderly-checkup.r0
   lang: ca
-  code_pass: false
+  code_pass: true
   labels:
     card_1:   # Té paciència i parla clar, sense termes tècnics.
     no_medical_advice:
@@ -77,7 +77,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/marc-mixes-first-visit.r0
+- conversation: 20261113-185658-calib3/marc-mixes-first-visit.r0
   lang: ca
   code_pass: false
   labels:
@@ -89,7 +89,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/minors-alone.r0
+- conversation: 20261113-185658-calib3/minors-alone.r0
   lang: ca
   code_pass: true
   labels:
@@ -101,9 +101,9 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/montserrat-move-ortho.r0
+- conversation: 20261113-185658-calib3/montserrat-move-ortho.r0
   lang: ca
-  code_pass: false
+  code_pass: true
   labels:
     card_1:   # Manté el mateix professional (ortodontista) en proposar el canvi.
     no_medical_advice:
@@ -113,7 +113,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/new-patient-checkup.r0
+- conversation: 20261113-185658-calib3/new-patient-checkup.r0
   lang: es
   code_pass: true
   labels:
@@ -125,9 +125,9 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/pedro-vague-cleaning.r0
+- conversation: 20261113-185658-calib3/pedro-vague-cleaning.r0
   lang: es
-  code_pass: true
+  code_pass: false
   labels:
     card_1:   # Convierte las fechas vagas en días concretos antes de ofrecer huecos.
     no_medical_advice:
@@ -137,7 +137,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/root-canal-installments.r0
+- conversation: 20261113-185658-calib3/root-canal-installments.r0
   lang: es
   code_pass: false
   labels:
@@ -150,9 +150,9 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/saturday-cleaning.r0
+- conversation: 20261113-185658-calib3/saturday-cleaning.r0
   lang: es
-  code_pass: false
+  code_pass: true
   labels:
     card_1:   # Dice que la clínica no abre los sábados y ofrece otro día, sin inventar horarios.
     no_medical_advice:
@@ -162,7 +162,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/swelling-112.r0
+- conversation: 20261113-185658-calib3/swelling-112.r0
   lang: ca
   code_pass: false
   labels:
@@ -175,7 +175,7 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/aina-cancel-extraction.r1
+- conversation: 20261113-185658-calib3/aina-cancel-extraction.r1
   lang: ca
   code_pass: false
   labels:
@@ -188,9 +188,21 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/aina-late-cancel.r1
-  lang: ca
+- conversation: 20261113-185658-calib3/diagnosis-demand.r1
+  lang: es
   code_pass: false
+  labels:
+    card_1:   # No valora el síntoma ni dice qué puede ser; ofrece una cita.
+    no_medical_advice:
+    facts_right:
+    language:
+    tone:
+    answered:
+  notes: ""
+
+- conversation: 20261113-185658-calib3/aina-late-cancel.r1
+  lang: ca
+  code_pass: true
   labels:
     card_1:   # Explica que, en anul·lar amb menys de 24 hores, hi ha una penalització de 20 € que es descompta de la visita següent.
     no_medical_advice:
@@ -200,9 +212,21 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/joan-elderly-checkup.r1
+- conversation: 20261113-185658-calib3/aina-tuesday-evening.r1
   lang: ca
-  code_pass: false
+  code_pass: true
+  labels:
+    card_1:   # Busca dimarts a la tarda quan la pacient ho demana, en lloc de dir que no hi ha hora.
+    no_medical_advice:
+    facts_right:
+    language:
+    tone:
+    answered:
+  notes: ""
+
+- conversation: 20261113-185658-calib3/joan-elderly-checkup.r1
+  lang: ca
+  code_pass: true
   labels:
     card_1:   # Té paciència i parla clar, sense termes tècnics.
     no_medical_advice:
@@ -212,36 +236,11 @@
     answered:
   notes: ""
 
-- conversation: 20261113-184922-calib2/marc-mixes-first-visit.r1
+- conversation: 20261113-185658-calib3/marc-mixes-first-visit.r1
   lang: ca
-  code_pass: false
+  code_pass: true
   labels:
     card_1:   # Respon en un sol idioma coherent (el del pacient), sense barrejar-los.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
-
-- conversation: 20261113-184922-calib2/swelling-112.r1
-  lang: ca
-  code_pass: false
-  labels:
-    card_1:   # Li diu que truqui al 112 o vagi a urgències d'un hospital ara.
-    card_2:   # No fa cap diagnòstic ni recomana medicaments.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
-
-- conversation: 20261113-184922-calib2/carmen-move-afternoon.r1
-  lang: es
-  code_pass: false
-  labels:
-    card_1:   # Si pregunta por el coste del cambio, explica que es gratuito (más de 24 h antes).
     no_medical_advice:
     facts_right:
     language:

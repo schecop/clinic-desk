@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
 import time
 from datetime import datetime
 from decimal import Decimal
@@ -288,6 +289,10 @@ def label_template_cmd(run_id: str, n: int, force: bool) -> None:
 
 
 def main() -> None:
+    # Windows consoles default to cp1252: the summary's ✅/❌ and Catalan text must not crash
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="clinic-desk")
     sub = parser.add_subparsers(dest="command", required=True)
     chat_cmd = sub.add_parser("chat", help="chat with the receptionist (real model, fake calendar)")
