@@ -8,6 +8,9 @@ llm:
     usd_per_mtok_out: 0
   # optional: the language guard's translator (ADR-0002); without it the receptionist's model translates
   # translator: { provider: anthropic, model: ..., usd_per_mtok_in: ..., usd_per_mtok_out: ... }
+  # persona: the simulated patient (clinic-desk simulate)
+  # judge: grades saved passes (clinic-desk judge RUN --role judge); add more roles to compare judges
+  # judge: { provider: gemini, model: ..., options: { reasoning_effort: low }, usd_per_mtok_in: ..., usd_per_mtok_out: ... }
 
 # How the receptionist gets the clinic's policies (ADR-0003)
 receptionist:

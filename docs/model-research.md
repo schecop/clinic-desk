@@ -136,6 +136,8 @@ Notes:
 
 **Plan:** label ~20 conversations by hand (ES and CA, passes and failures), then measure agreement per criterion for Gemini 3.8 Flash and GPT-5.4 mini.
 
+**First calls (2026-11-13):** both ids confirmed on the official pages: `gemini-3.8-flash` ([Gemini API](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash)) and `gpt-5.4-mini` ($0.75 / $4.50, [OpenAI](https://developers.openai.com/docs/models/gpt-5.4-mini)). GPT-5.4 mini on Chat Completions rejects function tools together with `reasoning_effort` (HTTP 400, "use /v1/responses or set reasoning_effort to 'none'"), so it judges with reasoning `none`; the verdict schema puts `evidence` and `reason` before `pass`. Gemini 3.8 Flash runs with `reasoning_effort: low`: an asymmetry to keep in mind when reading the agreement numbers. Gemini 3.8 Flash answered HTTP 503 "high demand" on every attempt of the first two tries (4 retries each). One GPT verdict: $0.0054.
+
 ## Coach
 
 | Model | Role | Price in / out | What it must show | What rules it out |

@@ -26,6 +26,18 @@ from clinic_desk.tracing import LangfuseExporter
 RUNS = Path("runs/sim")
 
 
+def load_run(run_id: str, out: Path = RUNS) -> list[Conversation]:
+    """The saved conversations of a pass (`<persona>.r<n>.json`; judge files are skipped)."""
+    folder = out / run_id
+    if not folder.is_dir():
+        raise FileNotFoundError(f"no pass {run_id!r} in {out}")
+    return [
+        Conversation.model_validate_json(f.read_text("utf-8"))
+        for f in sorted(folder.glob("*.r[0-9]*.json"))
+        if ".judge-" not in f.name
+    ]
+
+
 def new_run_id(label: str = "") -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S") + (f"-{label}" if label else "")
 

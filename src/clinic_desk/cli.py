@@ -22,17 +22,35 @@ import httpx
 from clinic_desk.clinic import load_clinic
 from clinic_desk.config import load_config
 from clinic_desk.env import load_env, require
-from clinic_desk.llm.base import AssistantMessage, Message, ToolResults
+from clinic_desk.llm.base import AssistantMessage, LLMError, Message, ToolResults
 from clinic_desk.llm.factory import build_llm
+from clinic_desk.llm.metered import Call, Metered
 from clinic_desk.receptionist.graph import Receptionist, make_desk
 from clinic_desk.receptionist.state import State
 from clinic_desk.retrieval import BM25, Overlap, Retriever, chunks_from
 from clinic_desk.retrieval.dense import Dense, cached, openai_embedder
 from clinic_desk.retrieval.evaluate import all_in_prompt_tokens, evaluate, load_questions, report
 from clinic_desk.simulator import budget
+from clinic_desk.simulator.calibration import (
+    LABELS,
+    agreement,
+    conversation_lang,
+    label_template,
+    load_labels,
+    pick,
+    stem,
+)
+from clinic_desk.simulator.judge import Verdict, judge
 from clinic_desk.simulator.persona import load_personas, load_split
-from clinic_desk.simulator.runner import RoleModel
-from clinic_desk.simulator.simulate import langfuse_trace_url, new_run_id, run_pass, summary
+from clinic_desk.simulator.runner import Conversation, RoleModel
+from clinic_desk.simulator.simulate import (
+    RUNS,
+    langfuse_trace_url,
+    load_run,
+    new_run_id,
+    run_pass,
+    summary,
+)
 from clinic_desk.tracing import LangfuseExporter
 
 DEFAULT_NOW = "2026-11-11T10:00"
@@ -200,6 +218,75 @@ async def simulate(
     print(f"\nsaved to runs/sim/{run_id}/ · {budget.check(Decimal(0))}")
 
 
+async def judge_run(
+    run_id: str, role: str, labelled_only: bool, concurrency: int, yes: bool
+) -> None:
+    """Judge the conversations of a saved pass with the model of config role `role`."""
+    load_env()
+    roles = load_config().llm
+    if role not in roles:
+        raise SystemExit(f"config: no llm.{role} role (see config/example.yaml)")
+    clinic = load_clinic()
+    personas = {p.id: p for p in load_personas(clinic)}
+    conversations = [c for c in load_run(run_id) if c.counted]
+    labelled = {x.conversation for x in load_labels()} if LABELS.exists() else set()
+    if labelled_only:
+        conversations = [c for c in conversations if f"{run_id}/{stem(c)}" in labelled]
+    if not conversations:
+        raise SystemExit("no conversations to judge")
+    choice = roles[role]
+    planned = budget.estimate(
+        len(conversations), {"judge": (choice.usd_per_mtok_in, choice.usd_per_mtok_out)}
+    )
+    print(f"{len(conversations)} conversations · {choice.model} · estimate ~${planned:.4f}")
+    print(budget.check(planned))
+    if planned > 0 and not yes:
+        raise SystemExit("not started: this run costs money; re-run with --yes")
+    calls: list[Call] = []
+    llm = Metered(
+        build_llm(choice), "judge", choice.usd_per_mtok_in, choice.usd_per_mtok_out, calls
+    )
+    gate = asyncio.Semaphore(concurrency)
+    folder = RUNS / run_id
+
+    async def one(c: Conversation) -> Verdict:
+        async with gate:
+            name = f"{run_id}/{stem(c)}"
+            try:
+                v = await judge(llm, c, personas[c.persona_id], clinic, name)
+            except LLMError as err:
+                v = Verdict(conversation=name, model=choice.model, criteria=[], error=str(err))
+        (folder / f"{stem(c)}.judge-{role}.json").write_text(v.model_dump_json(indent=1), "utf-8")
+        return v
+
+    try:
+        verdicts = await asyncio.gather(*(one(c) for c in conversations))
+    finally:
+        await llm.inner.aclose()
+        budget.record(calls, f"{run_id}/judge-{role}")
+    usd = sum((c.usd for c in calls), Decimal(0))
+    ok = [v for v in verdicts if not v.error]
+    print(f"judge pass {sum(v.passed for v in ok)}/{len(ok)} · errors {len(verdicts) - len(ok)}")
+    print(f"cost ${usd:.4f} · {budget.check(Decimal(0))}")
+    if labelled:
+        print()
+        print(agreement(load_labels(), {v.conversation: v for v in verdicts}))
+
+
+def label_template_cmd(run_id: str, n: int, force: bool) -> None:
+    if LABELS.exists() and not force:
+        raise SystemExit(f"{LABELS} exists (hand labels?); use --force to overwrite")
+    personas = {p.id: p for p in load_personas(load_clinic())}
+    chosen = pick(load_run(run_id), personas, n)
+    LABELS.parent.mkdir(parents=True, exist_ok=True)
+    LABELS.write_text(label_template(run_id, chosen, personas) + "\n", "utf-8")
+    langs = [conversation_lang(personas[c.persona_id]) for c in chosen]
+    print(
+        f"{LABELS}: {len(chosen)} conversations ({langs.count('ca')} Catalan,"
+        f" {sum(not c.code_pass for c in chosen)} code failures)"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="clinic-desk")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -222,7 +309,21 @@ def main() -> None:
     sim.add_argument("--concurrency", type=int, default=4)
     sim.add_argument("--label", default="", help="suffix for the run id")
     sim.add_argument("--yes", action="store_true", help="run even though it costs money")
+    jdg = sub.add_parser("judge", help="judge a saved pass (real model from config; paid)")
+    jdg.add_argument("run_id")
+    jdg.add_argument("--role", default="judge", help="config llm role of the judge model")
+    jdg.add_argument("--labelled", action="store_true", help="only hand-labelled conversations")
+    jdg.add_argument("--concurrency", type=int, default=4)
+    jdg.add_argument("--yes", action="store_true", help="run even though it costs money")
+    lab = sub.add_parser("label-template", help="pick conversations to hand-label for the judge")
+    lab.add_argument("run_id")
+    lab.add_argument("--n", type=int, default=20)
+    lab.add_argument("--force", action="store_true")
     args = parser.parse_args()
+    if args.command == "judge":
+        asyncio.run(judge_run(args.run_id, args.role, args.labelled, args.concurrency, args.yes))
+    if args.command == "label-template":
+        label_template_cmd(args.run_id, args.n, args.force)
     if args.command == "simulate":
         asyncio.run(
             simulate(args.split, args.persona, args.repeats, args.concurrency, args.label, args.yes)
