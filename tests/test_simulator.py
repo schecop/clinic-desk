@@ -75,13 +75,14 @@ def test_a_scripted_move_passes_every_code_check() -> None:
 
     assert c.end == "done" and c.calendar_ok, c.calendar_why
     assert [t.writes for t in c.turns][2][0].startswith("moved A003")
-    assert c.false_claims == 0 and c.language_misses == 0
+    assert c.false_claims == 0 and c.claims_blocked == 0 and c.language_misses == 0
     assert c.code_pass
     assert [x.role for x in c.calls].count("persona") == 4
 
 
-def test_a_claim_without_a_write_is_caught() -> None:
-    # the D2 failure, replayed: the model says it moved the appointment, nothing was written
+def test_a_claim_without_a_write_is_blocked_and_counted() -> None:
+    # the D2 failure, replayed: the model says it moved the appointment, nothing was written.
+    # The guard takes it back, so the patient is not lied to; the pass counts the block
     desk = [
         call("identify_patient", phone="600 000 002"),
         say("Ya está cambiada al lunes 16 a las 16:00."),
@@ -91,7 +92,8 @@ def test_a_claim_without_a_write_is_caught() -> None:
     c = run("carmen-move-afternoon", desk, patient)
     print("\n" + transcript(c))
 
-    assert c.false_claims == 1
+    assert c.false_claims == 0 and c.claims_blocked == 1
+    assert "todavía no he hecho ningún cambio" in c.turns[0].desk
     assert c.calendar_ok is False and not c.code_pass
 
 

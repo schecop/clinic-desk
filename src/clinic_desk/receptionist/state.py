@@ -53,6 +53,7 @@ class State(TypedDict):
     proposed: bool  # a propose_* succeeded in the last tools step
     unclear_streak: int  # replies in a row to a pending proposal that were neither yes nor no
     lang_fix: LangFix | None  # set when the model replied in the wrong language this turn
+    claim_blocked: bool  # the model claimed a write the graph had not made; not spoken
 
 
 def new_state(lang: Lang = "es") -> State:
@@ -68,6 +69,7 @@ def new_state(lang: Lang = "es") -> State:
         proposed=False,
         unclear_streak=0,
         lang_fix=None,
+        claim_blocked=False,
     )
 
 

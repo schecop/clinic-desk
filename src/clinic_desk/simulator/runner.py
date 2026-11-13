@@ -66,6 +66,7 @@ class Turn(BaseModel):
     writes: list[str] = []  # calendar changes made during this turn
     lang_fix: str | None = None
     false_claim: bool = False  # says done, and nothing has been written so far
+    claim_blocked: bool = False  # the graph's guard stopped a false "done" (patient never heard it)
     reply_lang_ok: bool = True
     persona_lang_ok: bool = True
     start_ns: int = 0  # from the persona's call to the receptionist's reply (for traces)
@@ -92,6 +93,10 @@ class Conversation(BaseModel):
     @property
     def false_claims(self) -> int:
         return sum(t.false_claim for t in self.turns)
+
+    @property
+    def claims_blocked(self) -> int:
+        return sum(t.claim_blocked for t in self.turns)
 
     @property
     def language_misses(self) -> int:
@@ -245,6 +250,7 @@ async def run_conversation(
                 writes=writes,
                 lang_fix=desk_side.state["lang_fix"],
                 false_claim=claims_write(reply) and not written_so_far,
+                claim_blocked=desk_side.state["claim_blocked"],
                 reply_lang_ok=plan.mixes or lang_ok,
                 persona_lang_ok=persona_lang_ok,
             )
@@ -284,6 +290,7 @@ def transcript(c: Conversation) -> str:
             flags = [
                 *(f"WRITE {w}" for w in t.writes),
                 *(["FALSE CLAIM"] if t.false_claim else []),
+                *(["claim blocked"] if t.claim_blocked else []),
                 *(["WRONG LANGUAGE"] if not t.reply_lang_ok else []),
                 *([f"lang fix {t.lang_fix}"] if t.lang_fix else []),
             ]

@@ -102,6 +102,7 @@ def summary(
         f"- Code pass: {sum(c.code_pass for c in counted)}/{len(counted)}"
         " (done, calendar right, no false claim, right language)",
         f"- False claims: {sum(c.false_claims for c in conversations)}"
+        f" · claims blocked by the guard: {sum(c.claims_blocked for c in conversations)}"
         f" · language misses: {sum(c.language_misses for c in conversations)}"
         f" · translations: {translated}",
         f"- Cost: ${cost:.4f} (${cost / max(len(conversations), 1):.4f} per conversation)",

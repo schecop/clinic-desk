@@ -27,6 +27,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from clinic_desk.clinic import Clinic, Lang, load_clinic
 from clinic_desk.llm.base import AssistantMessage, LLMClient, ToolResults, UserMessage
+from clinic_desk.receptionist.claims import claims_write
 from clinic_desk.receptionist.language import (
     classify_confirmation,
     day_label,
@@ -56,6 +57,13 @@ MAX_UNCLEAR = 3  # replies in a row that are neither yes nor no before a proposa
 HANDOFF: dict[Lang, str] = {
     "es": "Disculpe, no he podido resolverlo. Le paso con la recepción: llame al {phone}.",
     "ca": "Disculpi, no ho he pogut resoldre. Li passo amb la recepció: truqui al {phone}.",
+}
+# spoken instead of a reply that claimed a write when nothing was written or proposed
+NOT_DONE: dict[Lang, str] = {
+    "es": "Perdone, me he expresado mal: todavía no he hecho ningún cambio en su cita."
+    " ¿Qué quiere que haga?",
+    "ca": "Perdoni, m'he explicat malament: encara no he fet cap canvi a la seva cita."
+    " Què vol que faci?",
 }
 _LANG_NAME: dict[Lang, str] = {"es": "Spanish", "ca": "Catalan"}
 
@@ -202,6 +210,13 @@ def context_block(desk: Desk, state: State) -> str:
 # --- graph ---------------------------------------------------------------------------------
 
 
+def _may_claim(state: State) -> bool:
+    """A reply may say "done" only when nothing is pending and a write has been made in this
+    call (the context block tells the model which one)."""
+    outcome = state["outcome"]
+    return state["pending"] is None and outcome is not None and outcome.result == "done"
+
+
 def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
     # the fixed part first, identical on every call (cacheable); the per-turn context after it
     fixed_prompt = desk.prompt
@@ -237,11 +252,22 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
                 # the history holds what the patient heard; raw is dropped so the provider
                 # is not replayed the untranslated turn
                 message = AssistantMessage(translated, provider=message.provider)
+        blocked = bool(said) and claims_write(said) and not _may_claim(state)
+        if blocked:
+            # the gate held but the words did not: "queda anul·lada" while the cancel was still
+            # waiting for a yes (FAILURES, Aina; Carmen in D2). Not spoken, not kept in the
+            # history. With a proposal pending, ask_confirm repeats the question; otherwise a
+            # fixed line takes it back.
+            if state["pending"] is not None:
+                return {"steps": state["steps"] + 1, "lang_fix": fix, "claim_blocked": True}
+            said = NOT_DONE[state["lang"]]
+            message = AssistantMessage(said, provider="graph")
         return {
             "messages": [*state["messages"], message],
             "replies": [*state["replies"], said] if said else state["replies"],
             "steps": state["steps"] + 1,
             "lang_fix": fix,
+            "claim_blocked": state["claim_blocked"] or blocked,
         }
 
     async def tools(state: State) -> dict[str, Any]:
@@ -372,6 +398,7 @@ class Receptionist:
             "steps": 0,
             "proposed": False,
             "lang_fix": None,
+            "claim_blocked": False,
         }
         self.state = await self._graph.ainvoke(
             turn, {"recursion_limit": 4 * self.desk.max_steps + 8}

@@ -39,6 +39,7 @@ def build_trace(c: Conversation, run_id: str, split: str = "") -> Trace:
             "langfuse.trace.metadata.end": c.end,
             "langfuse.trace.metadata.calendar": f"{c.calendar_ok} · {c.calendar_why}",
             "langfuse.trace.metadata.false_claims": c.false_claims,
+            "langfuse.trace.metadata.claims_blocked": c.claims_blocked,
             "langfuse.trace.metadata.language_misses": c.language_misses,
             "langfuse.trace.metadata.usd": str(c.usd),
             OBS + "input": json.dumps(c.turns[0].patient if c.turns else ""),
@@ -85,6 +86,7 @@ def build_trace(c: Conversation, run_id: str, split: str = "") -> Trace:
 def _turn_span(trace: Trace, t: Turn) -> Span:
     flags = [
         *(["false claim"] if t.false_claim else []),
+        *(["claim blocked"] if t.claim_blocked else []),
         *(["wrong language"] if not t.reply_lang_ok else []),
         *(["persona off-language"] if not t.persona_lang_ok else []),
     ]

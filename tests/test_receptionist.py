@@ -227,6 +227,72 @@ def test_the_model_has_no_write_tool_and_saying_booked_books_nothing() -> None:
     assert isinstance(tool_results, ToolResults) and tool_results.results[0].is_error
 
 
+def test_a_claimed_write_while_the_proposal_is_pending_is_not_spoken() -> None:
+    """Regression (real pass, Aina): digits in the yes made it unclear, so nothing was written,
+    and Haiku said "queda anul·lada" anyway. The guard drops that reply; the question repeats."""
+    desk, llm = desk_with(
+        call("identify_patient", phone="600 000 005"),
+        call("propose_cancel", appointment_id="A001"),
+        say("Perfecte, Aina. La seva cita del dilluns 16 de novembre queda anul·lada."),
+        say("Ha quedat anul·lada la seva cita. Que tingui un bon dia."),
+    )
+    r = chat(desk, "ca")
+
+    async def run() -> None:
+        question = await r.reply("Sóc l'Aina, 600 000 005. Vull anul·lar la cita de dilluns.")
+        reply = await r.reply("El meu número és el 600 00 00 00 5. I sí, estic d'acord.")
+        assert reply == question  # only the graph's question: the false "done" is not heard
+        assert r.state["claim_blocked"] and r.state["pending"] is not None
+        assert not any("queda anul·lada" in getattr(m, "text", "") for m in r.state["messages"])
+        assert await upcoming(desk, "p05") != []
+        reply = await r.reply("Sí.")
+        assert reply.startswith("Ha quedat anul·lada")  # after the write, "done" is true
+        assert not r.state["claim_blocked"]
+        assert await upcoming(desk, "p05") == []
+
+    asyncio.run(run())
+    assert len(llm.requests) == 4
+
+
+def test_a_claimed_write_with_nothing_proposed_is_taken_back() -> None:
+    desk, _ = desk_with(
+        call("identify_patient", phone="600000002"),
+        say("Ya está cambiada al lunes 16 a las 16:00."),
+    )
+    r = chat(desk)
+    reply = asyncio.run(r.reply("Soy Carmen, 600000002, cámbieme la revisión al lunes."))
+    assert reply.startswith("Perdone, me he expresado mal: todavía no he hecho ningún cambio")
+    assert r.state["claim_blocked"]
+    assert asyncio.run(upcoming(desk, "p02")) == ["checkup@11-18 09:30"]
+
+
+def test_an_earlier_write_does_not_license_a_claim_about_a_pending_one() -> None:
+    desk, _ = desk_with(
+        call("identify_patient", phone="600 000 001"),
+        call("find_slots", service_id="cleaning", date_from="2026-11-18", date_to="2026-11-18"),
+        lambda req: call(
+            "propose_move",
+            appointment_id="A002",
+            staff_id="soler",
+            start=latest_slots(req)[0]["start"],
+        ),
+        say("Fet, l'he canviada."),
+        call("propose_cancel", appointment_id="A002"),
+        say("Cap problema: queda anul·lada."),  # the move was written; the cancel was not
+    )
+    r = chat(desk, "ca")
+
+    async def run() -> None:
+        await r.reply("Sóc en Joan, el 600 000 001. Vull canviar la neteja al dimecres.")
+        await r.reply("D'acord.")
+        question = await r.reply("De fet, millor anul·leu-la.")
+        reply = await r.reply("I em tornen els diners?")
+        assert reply == question and r.state["claim_blocked"]
+        assert await upcoming(desk, "p01") == ["cleaning@11-18 09:00"]
+
+    asyncio.run(run())
+
+
 def test_no_search_or_proposal_before_the_patient_is_identified() -> None:
     desk, llm = desk_with(
         call("find_slots", **FILLING),

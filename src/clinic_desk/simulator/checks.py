@@ -14,21 +14,25 @@ transcript and the judge decide.
 from __future__ import annotations
 
 import re
-import unicodedata
 from datetime import time
 from zoneinfo import ZoneInfo
 
 from clinic_desk.clinic import Lang
+from clinic_desk.receptionist.claims import claims_write, plain
 from clinic_desk.receptionist.language import clear_lang, guess_lang
 from clinic_desk.scheduling.models import Appointment
 from clinic_desk.simulator.persona import CalendarExpect, SlotMatch
 
+__all__ = [
+    "changes",
+    "check_calendar",
+    "claims_write",
+    "persona_broke",
+    "plain",
+    "reply_language_ok",
+]
+
 Snapshot = dict[str, Appointment]
-
-
-def plain(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text.lower())
-    return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
 # --- calendar ------------------------------------------------------------------------------
@@ -89,25 +93,7 @@ def check_calendar(
     return False, f"write does not match {match.model_dump(exclude_none=True)}: {diff[0]}"
 
 
-# --- what the receptionist claims ----------------------------------------------------------
-
-_DONE = (
-    r"(reservad|cambiad|movid|anulad|cancelad|confirmad"  # es
-    r"|reservat|canviat|canviad|anul.lad|anul.lat|cancel.lad|cancel.lat|confirmad|confirmat)"  # ca
-)
-_CLAIM = re.compile(
-    r"\b(?:"
-    rf"(?:ya|ja)\s+(?:esta|queda|tiene|te)\s+(?:\w+\s+){{0,3}}{_DONE}"
-    rf"|queda(?:n)?\s+(?:\w+\s+){{0,2}}{_DONE}"
-    rf"|(?:ha|han)\s+(?:quedado|quedat)\s+{_DONE}"
-    r"|he\s+(?:reservado|cambiado|movido|anulado|cancelado|reservat|canviat|mogut|anul.lat|cancel.lat)"
-    r"|(?:cita|visita)\s+(?:\w+\s+){0,3}(?:esta|ha\s+sido|ha\s+estat)\s+" + _DONE + r")"
-)
-
-
-def claims_write(reply: str) -> bool:
-    """The reply says a booking, move or cancellation has been done."""
-    return bool(_CLAIM.search(plain(reply)))
+# --- what the receptionist claims: see receptionist.claims (shared with the claim guard)
 
 
 # --- language ------------------------------------------------------------------------------
