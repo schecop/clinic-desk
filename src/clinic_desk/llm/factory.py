@@ -34,6 +34,10 @@ PROVIDERS: dict[str, Provider] = {
         "max_tokens",
     ),
     "anthropic": Provider("anthropic", "https://api.anthropic.com", "ANTHROPIC_API_KEY"),
+    # https://docs.mistral.ai/api (Chat Completions compatible)
+    "mistral": Provider(
+        "openai_compat", "https://api.mistral.ai/v1", "MISTRAL_API_KEY", "max_tokens"
+    ),
 }
 
 

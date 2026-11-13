@@ -125,6 +125,19 @@ def test_a_yes_said_together_with_the_end_marker_still_writes() -> None:
     assert c.turns[-1].writes and c.turns[-1].desk
 
 
+def test_done_while_a_confirmation_is_pending_does_not_end_the_call() -> None:
+    # Ministral pass: "Al lunes a las cuatro. [DONE]" picked a slot and hung up before the
+    # confirmation question could be answered; nothing was written
+    patient = [
+        CARMEN_PATIENT[0],
+        say("Al lunes 16 por la tarde, a partir de las cuatro. Gracias. [DONE]"),
+        *CARMEN_PATIENT[2:],
+    ]
+    c = run("carmen-move-afternoon", CARMEN_DESK, patient)
+    assert c.end == "done" and c.calendar_ok, c.calendar_why
+    assert len(c.turns) == 4
+
+
 def test_an_empty_persona_line_is_retried_once() -> None:
     # real pass: Gemma 4 spent all its tokens reasoning and said nothing
     empty = LLMResponse(say("").message, stop="max_tokens")

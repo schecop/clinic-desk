@@ -11,6 +11,14 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Regression guard:**
 -->
 
+## 2026-11-13 · The patient hung up while being asked to confirm
+- **Symptom:** first pass with Ministral 3 8B as the patient (Gemini API down): code pass 6/28. Most failures ended `done` with no write: the patient said "A les 17:30, si us plau. [DONE]", the receptionist asked "Hi està d'acord? Respongui sí o no", and the call ended there.
+- **Found by:** reading transcripts and the last persona line of every conversation before trusting the score (the lesson of 2026-11-12).
+- **Root cause (class):** simulator. Ministral ends the call when it picks a slot, ignoring the prompt rule Gemma followed ("answer a confirmation first"). The runner honoured any `[DONE]` after delivering the line.
+- **Fix:** a `[DONE]` while a proposal is pending does not end the call (the patient must answer, as a real one would); `[HANGUP]` still does. Persona prompt: "Choosing a time is not the end".
+- **Regression guard:** `test_done_while_a_confirmation_is_pending_does_not_end_the_call` (fails with the rule removed).
+- **Also seen (for the judge, not fixed):** numbered markdown lists of slots in a phone reply; "sería" in a Catalan reply; Carmen asked "¿cuánto me cuesta el cambio?" twice and got only the confirmation template back.
+
 ## 2026-11-12 · "Queda anul·lada" one turn before it was
 - **Symptom:** Aina (Catalan) answered the cancel confirmation with "El meu número és el 600 00 00 00 5. I sí, estic d'acord." The receptionist replied "La seva cita del dilluns 16 de novembre queda anul·lada", then the graph's template asked for confirmation again. The cancellation was written only on the next turn, after a plain "Sí".
 - **Found by:** the simulator's false-claim check (`FALSE CLAIM` on turn 4) in a real pass (Gemma 4 patient, Haiku receptionist). The calendar check passed: only the code check on the reply caught it.

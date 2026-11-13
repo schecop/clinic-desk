@@ -256,6 +256,11 @@ async def run_conversation(
             )
         )
         history.append(UserMessage(reply))
+        if marker and marker.group(1) == "DONE" and desk_side.state["pending"] is not None:
+            # "A les 17:30, si us plau. [DONE]": picking a slot is not the end of the call; the
+            # receptionist has just asked to confirm it. A real patient answers (Ministral pass:
+            # ~12 of 28 calls cut here, nothing written, the receptionist blamed)
+            continue
         if marker:
             end = "done" if marker.group(1) == "DONE" else "hangup"
             break
