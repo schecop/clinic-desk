@@ -42,6 +42,7 @@ from clinic_desk.simulator.calibration import (
     stem,
 )
 from clinic_desk.simulator.judge import Verdict, judge
+from clinic_desk.simulator.lint import lint, merge
 from clinic_desk.simulator.persona import load_personas, load_split
 from clinic_desk.simulator.runner import Conversation, RoleModel
 from clinic_desk.simulator.simulate import (
@@ -250,13 +251,19 @@ async def judge_run(
     gate = asyncio.Semaphore(concurrency)
     folder = RUNS / run_id
 
+    alone: dict[str, Verdict] = {}  # the judge without the lint, to see what each adds
+
     async def one(c: Conversation) -> Verdict:
         async with gate:
             name = f"{run_id}/{stem(c)}"
             try:
-                v = await judge(llm, c, personas[c.persona_id], clinic, name)
+                raw = await judge(
+                    llm, c, personas[c.persona_id], clinic, name, mode=choice.structured_output
+                )
             except LLMError as err:
-                v = Verdict(conversation=name, model=choice.model, criteria=[], error=str(err))
+                raw = Verdict(conversation=name, model=choice.model, criteria=[], error=str(err))
+        alone[name] = raw
+        v = merge(raw, lint(c))
         (folder / f"{stem(c)}.judge-{role}.json").write_text(v.model_dump_json(indent=1), "utf-8")
         return v
 
@@ -271,7 +278,12 @@ async def judge_run(
     print(f"cost ${usd:.4f} · {budget.check(Decimal(0))}")
     if labelled:
         print()
-        print(agreement(load_labels(), {v.conversation: v for v in verdicts}))
+        labels = load_labels()
+        table = agreement(labels, alone)
+        print("judge alone (no lint):")
+        print(table.split("\n\n")[0])
+        print("\njudge + lint:")
+        print(agreement(labels, {v.conversation: v for v in verdicts}))
 
 
 def label_template_cmd(run_id: str, n: int, force: bool) -> None:

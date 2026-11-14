@@ -9,4 +9,4 @@ language: { start: ca }
 expect:
   calendar: { cancelled: A001 }
 judge:
-  - Explica que, en anul·lar amb menys de 24 hores, hi ha una penalització de 20 € que es descompta de la visita següent.
+  - Abans de confirmar l'anul·lació, explica que en anul·lar amb menys de 24 hores hi ha una penalització de 20 € que es descompta de la visita següent.

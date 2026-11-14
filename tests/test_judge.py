@@ -69,6 +69,17 @@ def test_json_in_the_text_is_accepted_when_the_model_skips_the_tool() -> None:
     assert v.passed
 
 
+def test_json_mode_sends_no_tool_and_lists_every_id() -> None:
+    import json
+
+    llm = ScriptedLLM([say(json.dumps({"criteria": entries(fail="format")}))])
+    v = asyncio.run(judge(llm, carmen(), CARMEN, CLINIC, "x", mode="json"))
+    assert not v.passed and v.by_id()["format"].label == "no"
+    request = llm.requests[0]
+    assert not request.tools
+    assert all(cid in request.messages[0].content for cid in criteria_for(CARMEN))  # type: ignore[union-attr]
+
+
 def test_labels_round_trip_and_agreement(tmp_path: Path) -> None:
     c = carmen()
     chosen = pick([c], PERSONAS, n=20)

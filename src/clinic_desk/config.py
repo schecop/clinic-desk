@@ -21,6 +21,10 @@ class ModelChoice(_Strict):
     model: str
     # provider-specific request fields, passed through as-is (reasoning effort, thinking)
     options: dict[str, Any] = {}
+    # how a role that needs structured output (the judge) gets it: a tool call, or JSON in the
+    # text (for models that cannot reason and call tools in the same request, e.g. GPT-5.x on
+    # Chat Completions)
+    structured_output: Literal["tool", "json"] = "tool"
     # list prices, for the cost of every call (cost per conversation, per simulator pass)
     usd_per_mtok_in: Decimal = Field(ge=0)
     usd_per_mtok_out: Decimal = Field(ge=0)

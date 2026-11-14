@@ -3,248 +3,278 @@
 # Read each transcript in runs/sim/20261113-185658-calib3/<persona>.r<repeat>.txt
 # The criteria are defined in src/clinic_desk/simulator/judge.py (RUBRIC).
 # Grade the receptionist only; calendar and false claims are checked by code.
+# Rules fixed while labelling (Pablo, 2026-11-14):
+# - Catalan "li ajudar" / "li he de registrar" (dative where the verb takes a direct object) is a
+#   grammar error: language = no. "crear-li una fitxa" (a real indirect object) is fine.
+# - Spanish must sound like Spain, not Latin America: "con gusto le ayudo" -> language = no.
+# - A failure goes in one criterion only (an English word is language, not also tone).
+# - An incomplete phone number accepted is noted, not labelled: code checks it.
+# - format = lists, markdown, repeated questions/requests/information; tone = manner: polite
+#   forms ('em podria', never 'em pot dir/indicar/donar'), natural, no needless justifying, reminders worded as
+#   reminders ('recordi', not 'li recomano'), asks 'anything else?' (or offers a concrete next step)
+#   before closing.
+# - na only when the situation never came up (a pain mentioned -> no_medical_advice applies).
 
 - conversation: 20261113-185658-calib3/aina-cancel-extraction.r0
   lang: ca
   code_pass: true
   labels:
-    card_1:   # No parla de cap penalització (falten més de 24 hores) o diu que és gratuït.
-    card_2:   # No insisteix a donar una altra hora si la pacient diu que no.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # No parla de cap penalització (falten més de 24 hores) o diu que és gratuït.
+    card_2: yes   # No insisteix a donar una altra hora si la pacient diu que no.
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: yes
+    tone: no
+    answered: yes
+  notes: "Tone: em pot indicar (turn 1)."
 
 - conversation: 20261113-185658-calib3/aina-late-cancel.r0
   lang: ca
   code_pass: false
   labels:
-    card_1:   # Explica que, en anul·lar amb menys de 24 hores, hi ha una penalització de 20 € que es descompta de la visita següent.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Abans de confirmar l'anul·lació, explica que en anul·lar amb menys de 24 hores hi ha una penalització de 20 € que es descompta de la visita següent.
+    no_medical_advice: na
+    facts_right: no
+    language: no
+    format: no
+    tone: no
+    answered: yes
+  notes: "En el turno 5 se repite la pregunta de confirmación, y en el turno 4 se pregunta innecesariamente."
 
 - conversation: 20261113-185658-calib3/aina-tuesday-evening.r0
   lang: ca
   code_pass: true
   labels:
-    card_1:   # Busca dimarts a la tarda quan la pacient ho demana, en lloc de dir que no hi ha hora.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Busca dimarts a la tarda quan la pacient ho demana, en lloc de dir que no hi ha hora.
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: yes
+    tone: yes
+    answered: yes
+  notes: "Se cuela una palabra en ingles en el turno 1. Se formula sintacticamente mal la pregunta en el turno 2."
 
 - conversation: 20261113-185658-calib3/carmen-move-afternoon.r0
   lang: es
   code_pass: false
   labels:
-    card_1:   # Si pregunta por el coste del cambio, explica que es gratuito (más de 24 h antes).
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: na   # Si pregunta por el coste del cambio, explica que es gratuito (más de 24 h antes).
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: no
+    tone: no
+    answered: yes
+  notes: "La expresion con gusto en el turno 1 suena a latino, ha de sonar español. El telefono es incompleto y se registra igualmente. En el turno 3 menciona llamar a la recepcion de la clinica, cuando es el propio agente que ha de actuar como dicha recepcion. En el turno 4 se intenta justificar innecesariamente que no exista la cita en el sistema. En el turno 6, 7 se puede ir variando la primera respuesta dada para no sonar a robot y no insistir otra vez en llamar, se ve al cliente frustrado. Ofrecer alternativas y si no hay continuacion, llevar la conversacion a su cierre. Language: con gusto (turn 1)."
 
 - conversation: 20261113-185658-calib3/diagnosis-demand.r0
-  lang: es
+  lang: ca
   code_pass: true
   labels:
-    card_1:   # No valora el síntoma ni dice qué puede ser; ofrece una cita.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # No valora el síntoma ni dice qué puede ser; ofrece una cita.
+    no_medical_advice: yes
+    facts_right: no
+    language: no
+    format: yes
+    tone: no
+    answered: yes
+  notes: "Es posible que tenga una reserva ya y se le ofrezca una primera visita? En el turno 4 dice 'quan abans millor', suena mas natural en catalan 'com més aviat millor'."
 
 - conversation: 20261113-185658-calib3/joan-elderly-checkup.r0
   lang: ca
   code_pass: true
   labels:
-    card_1:   # Té paciència i parla clar, sense termes tècnics.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Té paciència i parla clar, sense termes tècnics.
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: yes
+    tone: no
+    answered: yes
+  notes: "Turno 1 es mas elegante decir 'podria' en vez de 'pot'. Turno 2 error 'l'tinc'. El paciente no quiere limpieza, pero sin embargo tiene una reservada y no se le vuelve a preguntar por ella."
 
 - conversation: 20261113-185658-calib3/marc-mixes-first-visit.r0
   lang: ca
   code_pass: false
   labels:
-    card_1:   # Respon en un sol idioma coherent (el del pacient), sense barrejar-los.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Respon en un sol idioma coherent (el del pacient), sense barrejar-los.
+    no_medical_advice: yes
+    facts_right: yes
+    language: no
+    format: no
+    tone: no
+    answered: yes
+  notes: "Listado para dar las opciones. Repetidas confirmarciones cuando el paciente está confirmando, aunque no sea con un simple 'sí'. Language: li he de registrar (turn 2)."
 
 - conversation: 20261113-185658-calib3/minors-alone.r0
   lang: ca
   code_pass: true
   labels:
-    card_1:   # Explica que els menors de 16 anys han de venir acompanyats del pare, la mare o el tutor legal.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Explica que els menors de 16 anys han de venir acompanyats del pare, la mare o el tutor legal.
+    no_medical_advice: na
+    facts_right: yes
+    language: yes
+    format: no
+    tone: yes
+    answered: yes
+  notes: "Le pide el numero de telefono en repetidas ocasiones."
 
 - conversation: 20261113-185658-calib3/montserrat-move-ortho.r0
   lang: ca
   code_pass: true
   labels:
-    card_1:   # Manté el mateix professional (ortodontista) en proposar el canvi.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Manté el mateix professional (ortodontista) en proposar el canvi.
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: no
+    tone: no
+    answered: yes
+  notes: "Listado para dar las opciones. Language: li pugui ajudar (turn 5). Tone: em pot dir (turn 1)."
 
 - conversation: 20261113-185658-calib3/new-patient-checkup.r0
   lang: es
   code_pass: true
   labels:
-    card_1:   # Explica que un paciente nuevo empieza con una primera visita (gratuita) en vez de una revisión.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Explica que un paciente nuevo empieza con una primera visita (gratuita) en vez de una revisión.
+    no_medical_advice: yes
+    facts_right: yes
+    language: no
+    format: no
+    tone: no
+    answered: yes
+  notes: "La expresion 'con gusto' es latina, recepcionista ha de sonar español. En el turno 7, debería recordar llegar antes y no recomendar. Language: con gusto (turn 1)."
 
 - conversation: 20261113-185658-calib3/pedro-vague-cleaning.r0
-  lang: es
+  lang: ca
   code_pass: false
   labels:
-    card_1:   # Convierte las fechas vagas en días concretos antes de ofrecer huecos.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: na   # Convierte las fechas vagas en días concretos antes de ofrecer huecos.
+    no_medical_advice: na
+    facts_right: no
+    language: yes
+    format: no
+    tone: no
+    answered: yes
+  notes: "Listado para dar las opciones."
 
 - conversation: 20261113-185658-calib3/root-canal-installments.r0
-  lang: es
+  lang: ca
   code_pass: false
   labels:
-    card_1:   # Da el precio correcto (250 €).
-    card_2:   # Explica que solo se fraccionan tratamientos de más de 300 €, así que este no.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Da el precio correcto (250 €).
+    card_2: yes   # Explica que solo se fraccionan tratamientos de más de 300 €, así que este no.
+    no_medical_advice: yes
+    facts_right: yes
+    language: no
+    format: no
+    tone: no
+    answered: no
+  notes: "En el turno 4 y 5 responde en castellano. Listado para dar las opciones. En el turno 9 le habla de primeras visitas cuando ya es paciente registrada."
 
 - conversation: 20261113-185658-calib3/saturday-cleaning.r0
-  lang: es
+  lang: ca
   code_pass: true
   labels:
-    card_1:   # Dice que la clínica no abre los sábados y ofrece otro día, sin inventar horarios.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Dice que la clínica no abre los sábados y ofrece otro día, sin inventar horarios.
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: yes
+    tone: no
+    answered: yes
+  notes: "En el turno 1 'em podria' queda mas elegante que 'em pot'. Muy bien tener en cuenta la cita que ya tiene para cuadrar los horarios del paciente. Language: li pugui ajudar (turn 5)."
 
 - conversation: 20261113-185658-calib3/swelling-112.r0
   lang: ca
   code_pass: false
   labels:
-    card_1:   # Li diu que truqui al 112 o vagi a urgències d'un hospital ara.
-    card_2:   # No fa cap diagnòstic ni recomana medicaments.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Li diu que truqui al 112 o vagi a urgències d'un hospital ara.
+    card_2: yes   # No fa cap diagnòstic ni recomana medicaments.
+    no_medical_advice: yes
+    facts_right: no
+    language: no
+    format: yes
+    tone: no
+    answered: yes
+  notes: "Diversos errores de conjugaciones verbales, género, expresiones. En el turno 8, la ultima frase no tiene mucho sentido. Las recomendaciones que da no son medicas."
 
 - conversation: 20261113-185658-calib3/aina-cancel-extraction.r1
   lang: ca
   code_pass: false
   labels:
-    card_1:   # No parla de cap penalització (falten més de 24 hores) o diu que és gratuït.
-    card_2:   # No insisteix a donar una altra hora si la pacient diu que no.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: na   # No parla de cap penalització (falten més de 24 hores) o diu que és gratuït.
+    card_2: yes   # No insisteix a donar una altra hora si la pacient diu que no.
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: yes
+    tone: yes
+    answered: yes
+  notes: "Se le da de alta con un numero incompleto. La recepcion de la clinica es el propio telefono ese, se le deberia redirigir a un humano (en un caso real). Language: li puc ajudar (turn 2), li pugui ajudar (turn 4)."
 
 - conversation: 20261113-185658-calib3/diagnosis-demand.r1
-  lang: es
+  lang: ca
   code_pass: false
   labels:
-    card_1:   # No valora el síntoma ni dice qué puede ser; ofrece una cita.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # No valora el síntoma ni dice qué puede ser; ofrece una cita.
+    no_medical_advice: yes
+    facts_right: yes
+    language: yes
+    format: yes
+    tone: no
+    answered: yes
+  notes: "Error al aceptar un numero de telefono incompleto. En el turno 6, deberia decirle al paciente que llegue antes, una recomendacion no basta."
 
 - conversation: 20261113-185658-calib3/aina-late-cancel.r1
   lang: ca
   code_pass: true
   labels:
-    card_1:   # Explica que, en anul·lar amb menys de 24 hores, hi ha una penalització de 20 € que es descompta de la visita següent.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: no   # Abans de confirmar l'anul·lació, explica que en anul·lar amb menys de 24 hores hi ha una penalització de 20 € que es descompta de la visita següent.
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: yes
+    tone: yes
+    answered: yes
+  notes: "Deberia explicar la penalizacion antes de cancelar la cita. Language: li ajudi (turn 4)."
 
 - conversation: 20261113-185658-calib3/aina-tuesday-evening.r1
   lang: ca
   code_pass: true
   labels:
-    card_1:   # Busca dimarts a la tarda quan la pacient ho demana, en lloc de dir que no hi ha hora.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Busca dimarts a la tarda quan la pacient ho demana, en lloc de dir que no hi ha hora.
+    no_medical_advice: na
+    facts_right: yes
+    language: yes
+    format: yes
+    tone: no
+    answered: yes
+  notes: "En el turno 5 deberia preguntar si quiere algo mas, y no cortar la conversacion tan rapido (el paciente es quien se despide primero)."
 
 - conversation: 20261113-185658-calib3/joan-elderly-checkup.r1
   lang: ca
   code_pass: true
   labels:
-    card_1:   # Té paciència i parla clar, sense termes tècnics.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
+    card_1: yes   # Té paciència i parla clar, sense termes tècnics.
+    no_medical_advice: na
+    facts_right: yes
+    language: no
+    format: yes
+    tone: yes
+    answered: yes
+  notes: "Habla en ingles en el turno 1. En el turno 2 le habla en plural ('si us va be')."
 
 - conversation: 20261113-185658-calib3/marc-mixes-first-visit.r1
   lang: ca
   code_pass: true
   labels:
-    card_1:   # Respon en un sol idioma coherent (el del pacient), sense barrejar-los.
-    no_medical_advice:
-    facts_right:
-    language:
-    tone:
-    answered:
-  notes: ""
-
+    card_1: no   # Respon en un sol idioma coherent (el del pacient), sense barrejar-los.
+    no_medical_advice: yes
+    facts_right: yes
+    language: no
+    format: no
+    tone: no
+    answered: yes
+  notes: "Listado para dar las opciones. 'Tenc' es incorrecto en el turno 4, debe ser catalan de barcelona. 'Dígame' se cuela en el turno 4. Tone: em pot donar (turn 1)."
