@@ -14,6 +14,8 @@
 #   reminders ('recordi', not 'li recomano'), asks 'anything else?' (or offers a concrete next step)
 #   before closing.
 # - na only when the situation never came up (a pain mentioned -> no_medical_advice applies).
+# - A card line saying what it must not do ("No parla de…") applies only if the situation came
+#   up (the cancellation was handled); then yes unless it did it. Never reached -> na (Pablo).
 
 - conversation: 20261113-185658-calib3/aina-cancel-extraction.r0
   lang: ca

@@ -23,7 +23,7 @@ from clinic_desk.clinic import WEEKDAYS, Lang
 from clinic_desk.llm.base import ToolCall, ToolResult, ToolSpec
 from clinic_desk.receptionist.language import WEEKDAY_NAMES, weekday_name
 from clinic_desk.receptionist.state import Desk, PendingAction, State
-from clinic_desk.scheduling.models import Appointment, Slot
+from clinic_desk.scheduling.models import Appointment, Slot, phone_key
 from clinic_desk.scheduling.scheduler import SchedulingError
 
 MAX_SEARCH_DAYS = 14
@@ -143,12 +143,24 @@ async def _scheduling(coro: Awaitable[Any]) -> Any:
         raise ToolError(err.problem.value) from None
 
 
+def _check_phone(phone: str) -> None:
+    """A Spanish number has 9 digits: a misheard one must not open a new patient record."""
+    digits = phone_key(phone)
+    if len(digits) != 9:
+        raise ToolError(
+            "invalid_phone",
+            f"A Spanish phone number has 9 digits; '{phone}' has {len(digits)}. Read back what"
+            " you understood and ask the patient to repeat the number.",
+        )
+
+
 # --- handlers ------------------------------------------------------------------------------
 
 
 async def identify_patient(
     desk: Desk, state: State, a: IdentifyPatient
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    _check_phone(a.phone)
     patient = desk.patients.find_by_phone(a.phone)
     if patient is None:
         return {"found": False, "next": "Ask for their full name and call register_patient."}, {}
@@ -164,6 +176,7 @@ async def identify_patient(
 async def register_patient(
     desk: Desk, state: State, a: RegisterPatient
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    _check_phone(a.phone)
     patient = desk.patients.register(name=a.name, phone=a.phone, lang=state["lang"])
     return {
         "patient_id": patient.id,

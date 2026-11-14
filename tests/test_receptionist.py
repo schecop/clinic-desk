@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from clinic_desk.llm.base import LLMResponse, ToolResults
-from clinic_desk.llm.scripted import Request, ScriptedLLM, call, say
+from clinic_desk.llm.scripted import Request, ScriptedLLM, call, calls, say
 from clinic_desk.receptionist.graph import Receptionist, make_desk
 from clinic_desk.receptionist.language import classify_confirmation, guess_lang, of
 from clinic_desk.receptionist.state import Desk
@@ -466,3 +466,16 @@ def test_find_slots_says_when_it_truncates_and_can_search_afternoons() -> None:
     afternoon = last_tool_payload(llm.requests[3])
     assert [s["start"][-5:] for s in afternoon["slots"][:2]] == ["16:00", "16:15"]
     assert {s["staff_id"] for s in afternoon["slots"]} == {"roca"}  # usual dentist kept
+
+
+@pytest.mark.parametrize("tool", ["identify_patient", "register_patient"])
+def test_a_misheard_phone_number_is_refused_not_registered(tool: str) -> None:
+    """calib3: '600 000 02' opened a new record, and Carmen's real appointment was lost."""
+    args = {"phone": "600 000 02"} | (
+        {"name": "Carmen López"} if tool == "register_patient" else {}
+    )
+    desk, llm = desk_with(calls((tool, args)), say("¿Me lo puede repetir?"))
+    asyncio.run(chat(desk).reply("Soy Carmen López, el 600 000 02."))
+    payload = last_tool_payload(llm.requests[-1])
+    assert payload["error"] == "invalid_phone" and "has 8" in payload["detail"]
+    assert desk.patients.find_by_phone("60000002") is None  # no record opened

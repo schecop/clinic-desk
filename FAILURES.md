@@ -11,6 +11,13 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Regression guard:**
 -->
 
+## 2026-11-14 · A misheard phone number opened a new patient record
+- **Symptom:** 4 of 20 calibration conversations (carmen-move-afternoon r0, aina-cancel-extraction r1, diagnosis-demand r1, pedro-vague-cleaning r0): the patient gave 8 or 10 digits ("600 000 02"), `identify_patient` found nobody, the receptionist registered a new patient with that number, and the real appointment was never found (move/cancel impossible, wrong service booked).
+- **Found by:** Pablo, hand-labelling for the judge calibration (2026-11-14).
+- **Root cause (class):** tool, plus simulator. Mistral Small (persona) says numbers badly; no tool checked the number, so the model trusted a lookup on a number that cannot exist.
+- **Fix:** `identify_patient` and `register_patient` refuse a number that is not 9 digits (`invalid_phone`, with the digit count) and tell the model to read back what it understood and ask again. Code, not prompt: the rule is exact.
+- **Regression guard:** `test_a_misheard_phone_number_is_refused_not_registered` (both tools; fails without the check). Not yet verified on a real-model pass.
+
 ## 2026-11-13 · The patient hung up while being asked to confirm
 - **Symptom:** first pass with Ministral 3 8B as the patient (Gemini API down): code pass 6/28. Most failures ended `done` with no write: the patient said "A les 17:30, si us plau. [DONE]", the receptionist asked "Hi està d'acord? Respongui sí o no", and the call ended there.
 - **Found by:** reading transcripts and the last persona line of every conversation before trusting the score (the lesson of 2026-11-12).
