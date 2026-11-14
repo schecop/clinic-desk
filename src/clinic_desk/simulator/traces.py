@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from clinic_desk.llm.metered import Call
+from clinic_desk.simulator.judge import Verdict
 from clinic_desk.simulator.runner import Conversation, Turn
 from clinic_desk.tracing import Span, Trace
 
@@ -110,3 +112,52 @@ def _bounds(c: Conversation) -> tuple[int, int]:
     ends = [t.end_ns for t in c.turns] + [x.end_ns for x in c.calls]
     times, ends = [x for x in times if x], [x for x in ends if x]
     return (min(times), max(ends)) if times and ends else (0, 0)
+
+
+def build_judge_trace(trace_id: str, verdict: Verdict, calls: list[Call]) -> Trace:
+    """The judge's spans, added to a conversation's trace after the pass: one `judge` span with
+    the verdict (failing criteria first, each with its evidence) and its model calls inside."""
+    failed = [cv for cv in verdict.criteria if cv.applies and not cv.passed]
+    trace = Trace("judge", trace_id=trace_id)
+    if calls:
+        trace.root.start_ns = min(c.start_ns for c in calls)
+        trace.root.end_ns = max(c.end_ns for c in calls)
+    else:
+        trace.root.end_ns = trace.root.start_ns
+    criteria = {
+        cv.id: {"label": cv.label, "evidence": cv.evidence, "reason": cv.reason}
+        for cv in sorted(verdict.criteria, key=lambda cv: cv.label != "no")
+    }
+    trace.root.set_many(
+        {
+            OBS + "input": json.dumps(verdict.conversation),
+            OBS + "output": json.dumps(
+                {"passed": verdict.passed, "failed": [cv.id for cv in failed], **criteria},
+                ensure_ascii=False,
+            ),
+            OBS + "metadata.model": verdict.model,
+            OBS + "metadata.lint": json.dumps(verdict.lint, ensure_ascii=False),
+        }
+    )
+    if verdict.error:
+        trace.root.error = verdict.error
+    elif failed:
+        trace.root.set_many({OBS + "level": "WARNING"})
+    for call in calls:
+        trace.add(
+            "judge",
+            trace.root,
+            call.start_ns,
+            call.end_ns,
+            {
+                OBS + "type": "generation",
+                OBS + "model.name": call.model,
+                OBS + "input": json.dumps(call.input, ensure_ascii=False),
+                OBS + "output": json.dumps(call.output, ensure_ascii=False),
+                OBS + "usage_details": json.dumps(
+                    {"input": call.input_tokens, "output": call.output_tokens}
+                ),
+                OBS + "cost_details": json.dumps({"total": float(call.usd)}),
+            },
+        )
+    return trace

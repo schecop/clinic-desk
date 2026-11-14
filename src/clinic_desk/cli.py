@@ -41,9 +41,10 @@ from clinic_desk.simulator.calibration import (
     pick,
     stem,
 )
-from clinic_desk.simulator.evaluate import judge_pass
+from clinic_desk.simulator.evaluate import judge_pass, load_verdicts
 from clinic_desk.simulator.judge import Verdict
 from clinic_desk.simulator.persona import load_personas, load_split
+from clinic_desk.simulator.report import analyse, to_html, to_markdown
 from clinic_desk.simulator.runner import Conversation, RoleModel
 from clinic_desk.simulator.simulate import (
     RUNS,
@@ -254,6 +255,8 @@ async def _judge_conversations(
     llm = Metered(
         build_llm(choice), "judge", choice.usd_per_mtok_in, choice.usd_per_mtok_out, calls
     )
+    traced = any(c.trace_id for c in conversations)
+    exporter = LangfuseExporter.from_env() if traced else None
     try:
         merged, alone = await judge_pass(
             conversations,
@@ -265,9 +268,12 @@ async def _judge_conversations(
             clinic=clinic,
             mode=choice.structured_output,
             concurrency=concurrency,
+            exporter=exporter,
         )
     finally:
         await llm.inner.aclose()
+        if exporter is not None:
+            await exporter.aclose()
         budget.record(calls, f"{run_id}/judge-{role}")
     return merged, alone, sum((c.usd for c in calls), Decimal(0))
 
@@ -312,6 +318,26 @@ async def judge_run(
         print(table.split("\n\n")[0])
         print("\njudge + lint:")
         print(agreement(labels, merged))
+
+
+def report_cmd(run_id: str, role: str) -> None:
+    """Write report.md and report.html for a judged pass (no model calls)."""
+    load_env()  # only for the Langfuse project id in the trace links
+    folder = RUNS / run_id
+    split_of = {pid: name for name, ids in load_split().items() for pid in ids}
+    personas = {p.id: p for p in load_personas(load_clinic())}
+    data = analyse(
+        run_id,
+        load_run(run_id),
+        load_verdicts(run_id, role, folder),
+        split_of,
+        personas,
+        langfuse_trace_url(),
+    )
+    (folder / "report.md").write_text(to_markdown(data), "utf-8")
+    (folder / "report.html").write_text(to_html(data), "utf-8")
+    print(to_markdown(data))
+    print(f"saved {folder / 'report.md'} and {folder / 'report.html'}")
 
 
 def label_template_cmd(run_id: str, n: int, force: bool) -> None:
@@ -362,6 +388,9 @@ def main() -> None:
     jdg.add_argument("--labelled", action="store_true", help="only hand-labelled conversations")
     jdg.add_argument("--concurrency", type=int, default=4)
     jdg.add_argument("--yes", action="store_true", help="run even though it costs money")
+    rep = sub.add_parser("report", help="eval report of a judged pass (free: no model calls)")
+    rep.add_argument("run_id")
+    rep.add_argument("--role", default="judge", help="whose verdicts to report")
     lab = sub.add_parser("label-template", help="pick conversations to hand-label for the judge")
     lab.add_argument("run_id")
     lab.add_argument("--n", type=int, default=20)
@@ -369,6 +398,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "judge":
         asyncio.run(judge_run(args.run_id, args.role, args.labelled, args.concurrency, args.yes))
+    if args.command == "report":
+        report_cmd(args.run_id, args.role)
     if args.command == "label-template":
         label_template_cmd(args.run_id, args.n, args.force)
     if args.command == "simulate":

@@ -59,11 +59,16 @@ class Span:
 
 
 class Trace:
-    def __init__(self, name: str, **attributes: Any) -> None:
-        self.trace_id = secrets.token_hex(16)
+    def __init__(self, name: str, trace_id: str | None = None, **attributes: Any) -> None:
+        """A new trace, or (with `trace_id`) more spans for one already exported: the root is
+        then an extra top-level observation and the trace's own name and fields are left alone."""
+        self.trace_id = trace_id or secrets.token_hex(16)
         self.spans: list[Span] = []
         self.root = self._start(name, None)
-        self.root.set(langfuse__trace__name=name, **attributes)
+        if trace_id is None:
+            self.root.set(langfuse__trace__name=name, **attributes)
+        else:
+            self.root.set(**attributes)
 
     def _start(self, name: str, parent: Span | None) -> Span:
         span = Span(

@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from clinic_desk.clinic import load_clinic
-from clinic_desk.llm.scripted import ScriptedLLM
+from clinic_desk.llm.scripted import ScriptedLLM, call
 from clinic_desk.simulator.persona import load_personas
 from clinic_desk.simulator.runner import RoleModel, run_conversation
 from clinic_desk.simulator.simulate import run_pass
@@ -122,3 +122,41 @@ def test_a_failed_export_does_not_fail_the_pass(tmp_path: Path) -> None:
         )
     )
     assert conversations[0].trace_id is None and conversations[0].code_pass
+
+
+def test_the_verdict_joins_the_conversation_trace(tmp_path: Path) -> None:
+    from clinic_desk.simulator.evaluate import judge_pass
+    from tests.test_judge import CARMEN, CLINIC, PERSONAS, entries
+
+    posted: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        posted.append(json.loads(request.content))
+        return httpx.Response(200, json={})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://lf")
+    exporter = LangfuseExporter("http://lf", "pk", "sk", client=client)
+    c = carmen().model_copy(update={"trace_id": "ab" * 16})
+    llm = ScriptedLLM([call("record_verdict", criteria=entries(fail="tone"))])
+    asyncio.run(
+        judge_pass(
+            [c],
+            llm,
+            run_id="r",
+            folder=tmp_path,
+            role="judge",
+            personas=PERSONAS,
+            clinic=CLINIC,
+            exporter=exporter,
+        )
+    )
+    [body] = posted
+    spans = body["resourceSpans"][0]["scopeSpans"][0]["spans"]
+    assert {s["traceId"] for s in spans} == {c.trace_id}  # the same trace, not a new one
+    root = next(s for s in spans if "parentSpanId" not in s)
+    a = attrs(root)
+    assert "langfuse.trace.name" not in a  # the conversation keeps its own name
+    assert json.loads(a["langfuse.observation.output"])["failed"] == ["tone"]
+    [gen] = [s for s in spans if s.get("parentSpanId") == root["spanId"]]
+    assert attrs(gen)["langfuse.observation.type"] == "generation"
+    assert CARMEN.id in json.loads(a["langfuse.observation.input"])

@@ -73,6 +73,7 @@ class Metered:
         self.provider = inner.provider
         self.model = inner.model
         self._in, self._out = usd_per_mtok_in, usd_per_mtok_out
+        self.prices = (usd_per_mtok_in, usd_per_mtok_out)
         self.calls: list[Call] = calls if calls is not None else []  # may be shared by roles
 
     async def complete(

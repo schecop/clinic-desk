@@ -131,7 +131,6 @@ def summary(
         ok = [v for v in judged.values() if not v.error]
         failing = Counter(cv.id for v in ok for cv in v.criteria if cv.applies and not cv.passed)
         model = next(iter(judged.values())).model
-        both = sum(c.code_pass and bool((v := verdict(c)) and v.passed) for c in counted)
         applied = [cv for v in ok for cv in v.criteria if cv.applies]
         rate = sum(cv.passed for cv in applied) / max(len(applied), 1)
         lines += [
@@ -141,7 +140,6 @@ def summary(
             f"- Judge ({model}, with the lint): {sum(v.passed for v in ok)}/{len(ok)} pass"
             f" · errors {len(judged) - len(ok)} · failing criteria:"
             f" {', '.join(f'{k} {n}' for k, n in failing.most_common()) or 'none'}",
-            f"- **Full pass: {both}/{len(counted)}** (code pass and judge pass)",
         ]
     lines += [
         "",

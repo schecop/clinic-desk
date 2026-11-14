@@ -136,5 +136,28 @@ def test_a_pass_is_judged_saved_and_summarised(tmp_path: Path) -> None:
     assert (
         "- Judge (scripted, with the lint): 0/1 pass" in text and "failing criteria: tone 1" in text
     )
-    assert "| ❌ tone |" in text and "**Full pass: 0/1**" in text
+    assert "| ❌ tone |" in text and "Full pass" not in text
     assert "Criteria passed: 6/7 (86%)" in text
+
+
+def test_the_report_scores_splits_criteria_personas_and_failures() -> None:
+    from clinic_desk.simulator.report import analyse, to_html, to_markdown
+
+    r0, r1 = carmen(), carmen().model_copy(update={"repeat": 1})
+    script0 = [call("record_verdict", criteria=entries(fail="tone"))]
+    script1 = [call("record_verdict", criteria=entries(fail="card_1"))]
+    v0 = asyncio.run(judge(ScriptedLLM(script0), r0, CARMEN, CLINIC, "run/" + CARMEN.id + ".r0"))
+    v1 = asyncio.run(judge(ScriptedLLM(script1), r1, CARMEN, CLINIC, "run/" + CARMEN.id + ".r1"))
+    data = analyse(
+        "run", [r0, r1], {v.conversation: v for v in (v0, v1)}, {CARMEN.id: "visible"}, PERSONAS
+    )
+    md = to_markdown(data)
+    assert "| visible | 2 | **86% (12/14)** | 2/2 |" in md and "full pass" not in md.lower()
+    assert "| tone | 50% (1/2) | 1 | 0 |" in md
+    assert f"| {CARMEN.id} | visible | move | 86% · 86% | 86% | 0% | 2/2 | card 1, tone 1 |" in md
+    # a card failure carries the card's own line, so it reads without opening the card
+    assert f"- {CARMEN.id} r1 · card_1: Si pregunta por el coste" in md
+    page = to_html(data)
+    assert page.startswith("<!doctype html>") and "prefers-color-scheme:dark" in page
+    assert "card_1: Si pregunta por el coste" in page and "http" not in page.split("<script>")[1]
+    assert f'data-persona="{CARMEN.id}"' in page and 'data-crit="tone"' in page
