@@ -21,9 +21,9 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from clinic_desk.clinic import load_clinic
-from clinic_desk.config import load_config
+from clinic_desk.config import ModelChoice, load_config
 from clinic_desk.env import load_env, require
-from clinic_desk.llm.base import AssistantMessage, LLMError, Message, ToolResults
+from clinic_desk.llm.base import AssistantMessage, Message, ToolResults
 from clinic_desk.llm.factory import build_llm
 from clinic_desk.llm.metered import Call, Metered
 from clinic_desk.receptionist.graph import Receptionist, make_desk
@@ -41,8 +41,8 @@ from clinic_desk.simulator.calibration import (
     pick,
     stem,
 )
-from clinic_desk.simulator.judge import Verdict, judge
-from clinic_desk.simulator.lint import lint, merge
+from clinic_desk.simulator.evaluate import judge_pass
+from clinic_desk.simulator.judge import Verdict
 from clinic_desk.simulator.persona import load_personas, load_split
 from clinic_desk.simulator.runner import Conversation, RoleModel
 from clinic_desk.simulator.simulate import (
@@ -166,7 +166,13 @@ async def eval_retrieval(embeddings: list[str]) -> None:
 
 
 async def simulate(
-    split: str, only: list[str], repeats: int, concurrency: int, label: str, yes: bool
+    split: str,
+    only: list[str],
+    repeats: int,
+    concurrency: int,
+    label: str,
+    yes: bool,
+    judge_role: str | None = "judge",
 ) -> None:
     """Print the estimate and the budget line; run only with --yes when it costs money."""
     load_env()
@@ -185,8 +191,14 @@ async def simulate(
     prices = {r: (roles[r].usd_per_mtok_in, roles[r].usd_per_mtok_out) for r in used}
     if "translator" not in roles:  # the receptionist's model translates
         prices["translator"] = prices["receptionist"]
+    if judge_role is not None:
+        if judge_role not in roles:
+            raise SystemExit(f"config: no llm.{judge_role} role (or use --no-judge)")
+        j = roles[judge_role]
+        prices["judge"] = (j.usd_per_mtok_in, j.usd_per_mtok_out)
     planned = budget.estimate(len(personas) * repeats, prices)
-    print(f"{len(personas)} personas x {repeats} repeats · estimate ~${planned:.4f}")
+    judged_by = f" + judge {roles[judge_role].model}" if judge_role else " (no judge)"
+    print(f"{len(personas)} personas x {repeats} repeats{judged_by} · estimate ~${planned:.4f}")
     print(budget.check(planned))
     if planned > 0 and not yes:
         raise SystemExit("not started: this run costs money; re-run with --yes")
@@ -216,8 +228,48 @@ async def simulate(
             await m.client.aclose()
         if exporter is not None:
             await exporter.aclose()
-    print(summary(run_id, conversations, langfuse_trace_url()))
+    verdicts = None
+    if judge_role is not None:
+        verdicts, _, usd = await _judge_conversations(
+            run_id, conversations, judge_role, roles[judge_role], concurrency
+        )
+        print(f"judge: ${usd:.4f}")
+    text = summary(run_id, conversations, langfuse_trace_url(), verdicts)
+    (RUNS / run_id / "summary.md").write_text(text + "\n", "utf-8")
+    print(text)
     print(f"\nsaved to runs/sim/{run_id}/ · {budget.check(Decimal(0))}")
+
+
+async def _judge_conversations(
+    run_id: str,
+    conversations: list[Conversation],
+    role: str,
+    choice: ModelChoice,
+    concurrency: int,
+) -> tuple[dict[str, Verdict], dict[str, Verdict], Decimal]:
+    """Judge + lint on a pass; verdicts saved next to the conversations; cost to the ledger."""
+    clinic = load_clinic()
+    personas = {p.id: p for p in load_personas(clinic)}
+    calls: list[Call] = []
+    llm = Metered(
+        build_llm(choice), "judge", choice.usd_per_mtok_in, choice.usd_per_mtok_out, calls
+    )
+    try:
+        merged, alone = await judge_pass(
+            conversations,
+            llm,
+            run_id=run_id,
+            folder=RUNS / run_id,
+            role=role,
+            personas=personas,
+            clinic=clinic,
+            mode=choice.structured_output,
+            concurrency=concurrency,
+        )
+    finally:
+        await llm.inner.aclose()
+        budget.record(calls, f"{run_id}/judge-{role}")
+    return merged, alone, sum((c.usd for c in calls), Decimal(0))
 
 
 async def judge_run(
@@ -228,9 +280,8 @@ async def judge_run(
     roles = load_config().llm
     if role not in roles:
         raise SystemExit(f"config: no llm.{role} role (see config/example.yaml)")
-    clinic = load_clinic()
-    personas = {p.id: p for p in load_personas(clinic)}
-    conversations = [c for c in load_run(run_id) if c.counted]
+    all_conversations = load_run(run_id)
+    conversations = [c for c in all_conversations if c.counted]
     labelled = {x.conversation for x in load_labels()} if LABELS.exists() else set()
     if labelled_only:
         conversations = [c for c in conversations if f"{run_id}/{stem(c)}" in labelled]
@@ -244,38 +295,15 @@ async def judge_run(
     print(budget.check(planned))
     if planned > 0 and not yes:
         raise SystemExit("not started: this run costs money; re-run with --yes")
-    calls: list[Call] = []
-    llm = Metered(
-        build_llm(choice), "judge", choice.usd_per_mtok_in, choice.usd_per_mtok_out, calls
+    merged, alone, usd = await _judge_conversations(
+        run_id, conversations, role, choice, concurrency
     )
-    gate = asyncio.Semaphore(concurrency)
-    folder = RUNS / run_id
-
-    alone: dict[str, Verdict] = {}  # the judge without the lint, to see what each adds
-
-    async def one(c: Conversation) -> Verdict:
-        async with gate:
-            name = f"{run_id}/{stem(c)}"
-            try:
-                raw = await judge(
-                    llm, c, personas[c.persona_id], clinic, name, mode=choice.structured_output
-                )
-            except LLMError as err:
-                raw = Verdict(conversation=name, model=choice.model, criteria=[], error=str(err))
-        alone[name] = raw
-        v = merge(raw, lint(c))
-        (folder / f"{stem(c)}.judge-{role}.json").write_text(v.model_dump_json(indent=1), "utf-8")
-        return v
-
-    try:
-        verdicts = await asyncio.gather(*(one(c) for c in conversations))
-    finally:
-        await llm.inner.aclose()
-        budget.record(calls, f"{run_id}/judge-{role}")
-    usd = sum((c.usd for c in calls), Decimal(0))
-    ok = [v for v in verdicts if not v.error]
-    print(f"judge pass {sum(v.passed for v in ok)}/{len(ok)} · errors {len(verdicts) - len(ok)}")
+    ok = [v for v in merged.values() if not v.error]
+    print(f"judge pass {sum(v.passed for v in ok)}/{len(ok)} · errors {len(merged) - len(ok)}")
     print(f"cost ${usd:.4f} · {budget.check(Decimal(0))}")
+    if not labelled_only:  # the whole pass judged: the summary gets the judge columns
+        text = summary(run_id, all_conversations, langfuse_trace_url(), merged)
+        (RUNS / run_id / "summary.md").write_text(text + "\n", "utf-8")
     if labelled:
         print()
         labels = load_labels()
@@ -283,7 +311,7 @@ async def judge_run(
         print("judge alone (no lint):")
         print(table.split("\n\n")[0])
         print("\njudge + lint:")
-        print(agreement(labels, {v.conversation: v for v in verdicts}))
+        print(agreement(labels, merged))
 
 
 def label_template_cmd(run_id: str, n: int, force: bool) -> None:
@@ -326,6 +354,8 @@ def main() -> None:
     sim.add_argument("--concurrency", type=int, default=4)
     sim.add_argument("--label", default="", help="suffix for the run id")
     sim.add_argument("--yes", action="store_true", help="run even though it costs money")
+    sim.add_argument("--judge", default="judge", help="config llm role that judges the pass")
+    sim.add_argument("--no-judge", action="store_true", help="code checks only, no judge")
     jdg = sub.add_parser("judge", help="judge a saved pass (real model from config; paid)")
     jdg.add_argument("run_id")
     jdg.add_argument("--role", default="judge", help="config llm role of the judge model")
@@ -343,7 +373,15 @@ def main() -> None:
         label_template_cmd(args.run_id, args.n, args.force)
     if args.command == "simulate":
         asyncio.run(
-            simulate(args.split, args.persona, args.repeats, args.concurrency, args.label, args.yes)
+            simulate(
+                args.split,
+                args.persona,
+                args.repeats,
+                args.concurrency,
+                args.label,
+                args.yes,
+                judge_role=None if args.no_judge else args.judge,
+            )
         )
     if args.command == "eval-retrieval":
         asyncio.run(eval_retrieval(args.embeddings))

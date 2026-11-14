@@ -116,3 +116,25 @@ def test_pick_covers_every_persona_before_repeats() -> None:
         ("carmen-move-afternoon", 0),
         ("minors-alone", 0),
     ]
+
+
+def test_a_pass_is_judged_saved_and_summarised(tmp_path: Path) -> None:
+    from clinic_desk.simulator.evaluate import judge_pass, load_verdicts
+    from clinic_desk.simulator.simulate import summary
+
+    c = carmen()
+    llm = ScriptedLLM([call("record_verdict", criteria=entries(fail="tone"))])
+    merged, alone = asyncio.run(
+        judge_pass(
+            [c], llm, run_id="run", folder=tmp_path, role="judge", personas=PERSONAS, clinic=CLINIC
+        )
+    )
+    name = "run/carmen-move-afternoon.r0"
+    assert not merged[name].passed and not alone[name].passed
+    assert load_verdicts("run", "judge", tmp_path) == merged
+    text = summary("run", [c], None, merged)
+    assert (
+        "- Judge (scripted, with the lint): 0/1 pass" in text and "failing criteria: tone 1" in text
+    )
+    assert "| ❌ tone |" in text and "**Full pass: 0/1**" in text
+    assert "Criteria passed: 6/7 (86%)" in text

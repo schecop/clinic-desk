@@ -33,12 +33,12 @@ class Usage:
 
 
 # one conversation: 10 receptionist calls x ~3k in / 200 out; 8 persona calls x 1.5k / 100;
-# the translator only on wrong-language turns (assume 1); the judge once x 5k / 500
+# the translator only on wrong-language turns (assume 1); the judge once x 7k / 700
 PER_CONVERSATION: dict[str, Usage] = {
     "receptionist": Usage(10, 3000, 200),
     "translator": Usage(1, 300, 150),
     "persona": Usage(8, 1500, 100),
-    "judge": Usage(1, 5000, 500),
+    "judge": Usage(1, 7000, 700),  # measured 2026-11-14: ~$0.0075 a conversation
 }
 
 

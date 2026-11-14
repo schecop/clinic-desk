@@ -18,6 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from clinic_desk.simulator import budget
+from clinic_desk.simulator.judge import Verdict
 from clinic_desk.simulator.persona import Persona
 from clinic_desk.simulator.runner import Conversation, RoleModel, run_conversation, transcript
 from clinic_desk.simulator.traces import build_trace
@@ -99,6 +100,7 @@ def summary(
     run_id: str,
     conversations: list[Conversation],
     trace_url: Callable[[str], str] | None = None,
+    verdicts: dict[str, Verdict] | None = None,  # "<run>/<persona>.r<n>" -> judge + lint
 ) -> str:
     counted = [c for c in conversations if c.counted]
     cost = sum((c.usd for c in conversations), Decimal(0))
@@ -119,10 +121,33 @@ def summary(
         f" · translations: {translated}",
         f"- Cost: ${cost:.4f} (${cost / max(len(conversations), 1):.4f} per conversation)",
         f"- Receptionist latency per turn: p50 {p50:.1f}s · p95 {p95:.1f}s",
+    ]
+    judged = verdicts or {}
+
+    def verdict(c: Conversation) -> Verdict | None:
+        return judged.get(f"{run_id}/{c.persona_id}.r{c.repeat}")
+
+    if judged:
+        ok = [v for v in judged.values() if not v.error]
+        failing = Counter(cv.id for v in ok for cv in v.criteria if cv.applies and not cv.passed)
+        model = next(iter(judged.values())).model
+        both = sum(c.code_pass and bool((v := verdict(c)) and v.passed) for c in counted)
+        applied = [cv for v in ok for cv in v.criteria if cv.applies]
+        rate = sum(cv.passed for cv in applied) / max(len(applied), 1)
+        lines += [
+            # a whole conversation rarely passes every criterion; this one moves with each fix
+            f"- **Criteria passed: {sum(cv.passed for cv in applied)}/{len(applied)}"
+            f" ({rate:.0%})** (judge + lint, criteria that applied)",
+            f"- Judge ({model}, with the lint): {sum(v.passed for v in ok)}/{len(ok)} pass"
+            f" · errors {len(judged) - len(ok)} · failing criteria:"
+            f" {', '.join(f'{k} {n}' for k, n in failing.most_common()) or 'none'}",
+            f"- **Full pass: {both}/{len(counted)}** (code pass and judge pass)",
+        ]
+    lines += [
         "",
         "| persona | category | end | calendar | false claims | lang misses | turns | code pass"
-        " | trace |",
-        "|---|---|---|---|---|---|---|---|---|",
+        " | judge | trace |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for c in sorted(conversations, key=lambda c: (c.persona_id, c.repeat)):
         trace = "-"
@@ -131,9 +156,18 @@ def summary(
         lines.append(
             f"| {c.persona_id} r{c.repeat} | {c.category} | {c.end} | {c.calendar_ok} |"
             f" {c.false_claims} | {c.language_misses} | {len(c.turns)} |"
-            f" {'✅' if c.code_pass else '❌'} | {trace} |"
+            f" {'✅' if c.code_pass else '❌'} | {_judge_cell(verdict(c))} | {trace} |"
         )
     return "\n".join(lines)
+
+
+def _judge_cell(v: Verdict | None) -> str:
+    if v is None:
+        return "-"
+    if v.error:
+        return "error"
+    failed = [cv.id for cv in v.criteria if cv.applies and not cv.passed]
+    return "✅" if not failed else "❌ " + ", ".join(failed)
 
 
 def langfuse_trace_url() -> Callable[[str], str] | None:
