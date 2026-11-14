@@ -138,6 +138,22 @@ Notes:
 
 **First calls (2026-11-13):** both ids confirmed on the official pages: `gemini-3.8-flash` ([Gemini API](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash)) and `gpt-5.4-mini` ($0.75 / $4.50, [OpenAI](https://developers.openai.com/docs/models/gpt-5.4-mini)). GPT-5.4 mini on Chat Completions rejects function tools together with `reasoning_effort` (HTTP 400, "use /v1/responses or set reasoning_effort to 'none'"), so it judges with reasoning `none`; the verdict schema puts `evidence` and `reason` before `pass`. Gemini 3.8 Flash runs with `reasoning_effort: low`: an asymmetry to keep in mind when reading the agreement numbers. Gemini 3.8 Flash answered HTTP 503 "high demand" on every attempt of the first two tries (4 retries each). One GPT verdict: $0.0054.
 
+
+**Calibration and choice (2026-11-14): Gemini 3.8 Flash, with the code lint.** 20 hand-labelled conversations from `calib3` (18 Catalan), labelled by Pablo with the rules written in `data/eval/judge_labels.yaml`. Agreement per criterion with the hand labels:
+
+| judge | language | format | tone | facts_right | card | all criteria | cost / 20 |
+|---|---|---|---|---|---|---|---|
+| GPT-5.4 mini, reasoning none, tool call | 50% | – | 30% (tone+format) | 90% | 75% | 74% | $0.114 |
+| GPT-5.4 mini, reasoning low, JSON (2 runs) | 70-90% | 85-100% | 35-50% | 85-90% | 83-92% | 83-84% | $0.153-0.158 |
+| GPT-5.4 mini + lint | 100% | 90-100% | 85-90% | 85-90% | 83-92% | 92% | same |
+| **Gemini 3.8 Flash, reasoning low, tool call (2 runs)** | 95% | 100% | 75-80% | 80-85% | 88-96% | **92%** | $0.139-0.155 |
+
+- Gemini alone matches GPT + lint: it applies the labeller's tone rules itself (closing without "anything else?", "em pot"), where GPT needed the lint. Same price. Paid tier (the free quota gave HTTP 429 on all 20).
+- **Stability:** two Gemini runs on the same 20 gave the same label on 139/144 criteria (97%). GPT-5.4 mini moved up to 15 points per criterion between two identical runs.
+- **Both miss** a policy applied wrongly (an invented "cleaning needs a first visit" rule; the first-visit DNI rule applied to a checkup): `facts_right` on how a rule is applied is the weakest criterion.
+- **Caveats:** the rubric and the lint were tuned on these same 20 conversations, so 92% is optimistic; a held-out set of ~8 freshly labelled conversations is the honest number (open). Conversation-level pass/fail agreement is 100% but meaningless here: under these labels all 20 fail.
+- The lint (`simulator/lint.py`) stays with any judge: free, deterministic, and it gives the coach exact evidence (turn and phrase).
+
 ## Coach
 
 | Model | Role | Price in / out | What it must show | What rules it out |
