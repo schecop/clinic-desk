@@ -135,7 +135,6 @@ _ES = {
     "hacer",
     "duele",
     "nombre",
-    "cita",
     "para",
     "y",
     "su",
@@ -164,8 +163,11 @@ _ES = {
 
 
 def _marker_counts(text: str) -> tuple[int, int]:
-    words = re.findall(r"[\w·']+", text.lower())
-    return sum(w in _CA for w in words), sum(w in _ES for w in words)
+    # an elided word (m'ho, l'he, d'extracció) is Catalan: Spanish never elides. The typographic
+    # apostrophe counts too. "cita" is not a marker: Catalan says it as well (calib3 root-canal).
+    words = re.findall(r"[\w·']+", text.lower().replace("\u2019", "'"))
+    elided = sum(1 for w in words if re.fullmatch(r"\w+'\w+", w))
+    return sum(w in _CA for w in words) + elided, sum(w in _ES for w in words)
 
 
 def guess_lang(text: str, default: Lang) -> Lang:

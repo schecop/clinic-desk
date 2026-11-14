@@ -479,3 +479,39 @@ def test_a_misheard_phone_number_is_refused_not_registered(tool: str) -> None:
     payload = last_tool_payload(llm.requests[-1])
     assert payload["error"] == "invalid_phone" and "has 8" in payload["detail"]
     assert desk.patients.find_by_phone("60000002") is None  # no record opened
+
+
+def test_a_new_patient_is_told_the_services_from_the_clinic_data() -> None:
+    """calib3 pedro: the tool said 'first visit or emergency only', so a cleaning was refused."""
+    desk, llm = desk_with(
+        calls(("register_patient", {"name": "Pedro Navarro", "phone": "600 000 099"})),
+        say("Ja l'he registrat. Què necessita?"),
+    )
+    asyncio.run(chat(desk, "ca").reply("Em dic Pedro Navarro, el 600 000 099."))
+    payload = last_tool_payload(llm.requests[1])
+    assert payload["bookable_now"] == ["primera visita", "neteja dental", "urgència dental"]
+
+
+def test_the_confirmation_question_is_heard_once_when_the_model_copies_it() -> None:
+    """calib3 aina-late-cancel r0: the model repeated the question and the graph added it again."""
+    question: list[str] = []
+
+    def answer_and_copy(request: Request) -> LLMResponse:
+        return say("El empaste cuesta 70 €.\n" + question[0])
+
+    desk, _ = desk_with(
+        call("identify_patient", phone="600000002"),
+        call("find_slots", **FILLING),
+        propose_first_slot,
+        answer_and_copy,
+    )
+    r = chat(desk)
+
+    async def run() -> None:
+        await r.reply("Soy Carmen, 600000002, un empaste el lunes.")
+        question.append(r.state["replies"][-1])
+        reply = await r.reply("¿Y eso cuánto me cuesta?")
+        assert reply.count("Para confirmar:") == 1
+        assert reply == "El empaste cuesta 70 €.\n" + question[0]
+
+    asyncio.run(run())

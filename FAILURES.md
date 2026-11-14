@@ -11,6 +11,28 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Regression guard:**
 -->
 
+## 2026-11-14 · The confirmation question twice in one reply
+- **Symptom:** aina-late-cancel r0 (turns 4-5) and marc-mixes-first-visit r0 (turn 8): after an unclear answer the patient heard the confirmation question twice in a row, or the model's own "Hi està d'acord?" plus the template.
+- **Found by:** Pablo, hand labels (`format`).
+- **Root cause (class):** prompt / graph. When the answer is not a plain yes, the agent answers it and often copies last turn's question from the history; `ask_confirm` then appended the template again.
+- **Fix:** `ask_confirm` strips the template from the model's replies of the turn before adding it once. Its own reworded question ("Hi està d'acord amb l'anul·lació?") is not caught: that one is for the prompt (the coach), measured by `format`.
+- **Also seen, kept on purpose:** "Sí, sí, d'acord, que no aguanto més el dolor" is classified `unclear` because of the "no". `classify_confirmation` errs on the safe side (a missed yes costs one more question; a false yes writes a slot nobody wanted).
+- **Regression guard:** `test_the_confirmation_question_is_heard_once_when_the_model_copies_it` (fails without the fix).
+
+## 2026-11-14 · A Catalan turn read as Spanish, and correct replies "translated" into Spanish
+- **Symptom:** root-canal-installments r0, turns 4-5: replies in Spanish to a Catalan patient, flagged "lang fix translated".
+- **Found by:** Pablo, hand labels (`language`); the trace flag pointed to the guard.
+- **Root cause (class):** tool (language detection). "I si demano una cita igualment, m’ho podran mirar allà?" had one marker word, "cita", listed as Spanish (Catalan says it too), so the call switched to Spanish and the guard translated a correct Catalan reply. The next turn (a bare phone number) kept Spanish. The typographic apostrophe also split "m’ho".
+- **Fix:** "cita" is no longer a marker; an elided word (m'ho, l'he, d'extracció, with either apostrophe) counts as Catalan, since Spanish never elides.
+- **Regression guard:** `test_a_catalan_turn_with_cita_and_an_elision_stays_catalan` (fails without the fix).
+
+## 2026-11-14 · The tool told the model that a new patient cannot book a cleaning
+- **Symptom:** pedro-vague-cleaning r0: "com a pacient nou, només puc reservar una primera visita o una urgència… incloses les neteges"; a cleaning needs no prior visit in `clinic.yaml`. Wrong service booked.
+- **Found by:** Pablo, hand labels (`facts_right`); both judges missed it in every run (they read the rule as clinic policy).
+- **Root cause (class):** tool and prompt. `register_patient` returned the fixed note "they can book a first visit or an emergency only", and `prompts/receptionist.md` said the same: a fact written by hand, not taken from the data.
+- **Fix:** `register_patient` returns `bookable_now`, built from the services without `requires_prior_visit`; the prompt line points to it.
+- **Regression guard:** `test_a_new_patient_is_told_the_services_from_the_clinic_data` (fails without the fix).
+
 ## 2026-11-14 · A misheard phone number opened a new patient record
 - **Symptom:** 4 of 20 calibration conversations (carmen-move-afternoon r0, aina-cancel-extraction r1, diagnosis-demand r1, pedro-vague-cleaning r0): the patient gave 8 or 10 digits ("600 000 02"), `identify_patient` found nobody, the receptionist registered a new patient with that number, and the real appointment was never found (move/cancel impossible, wrong service booked).
 - **Found by:** Pablo, hand-labelling for the judge calibration (2026-11-14).

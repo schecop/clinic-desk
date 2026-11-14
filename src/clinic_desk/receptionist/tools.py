@@ -181,7 +181,10 @@ async def register_patient(
     return {
         "patient_id": patient.id,
         "name": patient.name,
-        "note": "New patient: they can book a first visit or an emergency only.",
+        "note": "New patient: before a first visit they can book only these services.",
+        "bookable_now": [
+            s.name.get(state["lang"]) for s in desk.clinic.services if not s.requires_prior_visit
+        ],
     }, {"patient_id": patient.id}
 
 

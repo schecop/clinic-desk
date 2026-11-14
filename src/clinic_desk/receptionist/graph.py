@@ -305,9 +305,12 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
     async def ask_confirm(state: State) -> dict[str, Any]:
         assert state["pending"] is not None
         text = confirmation_question(desk, state["pending"], state["lang"])
+        # the model often copies last turn's question into its answer; the patient must hear
+        # it once (calib3: twice in a row, aina-late-cancel r0 and marc r0)
+        said = [r.replace(text, "").strip() for r in state["replies"]]
         return {
             "messages": [*state["messages"], AssistantMessage(text, provider="graph")],
-            "replies": [*state["replies"], text],
+            "replies": [*(r for r in said if r), text],
         }
 
     async def confirm(state: State) -> dict[str, Any]:

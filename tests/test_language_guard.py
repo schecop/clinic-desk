@@ -113,3 +113,11 @@ def test_needs_translation_only_for_the_other_language() -> None:
 
 def test_a_catalan_sentence_with_shared_words_is_read_as_catalan() -> None:
     assert guess_lang("el dilluns es pot?", default="es") == "ca"
+
+
+def test_a_catalan_turn_with_cita_and_an_elision_stays_catalan() -> None:
+    """calib3 root-canal: 'cita' counted as Spanish flipped the call, and the guard then
+    'translated' two correct Catalan replies into Spanish."""
+    turn = "I si demano una cita igualment, m\u2019ho podran mirar allà?"
+    assert guess_lang(turn, default="es") == "ca"
+    assert guess_lang("Quería pedir una cita para mañana", default="ca") == "es"
