@@ -17,7 +17,7 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Symptom:** in a hand-run chat on the Google test calendar, the receptionist offered "Tengo el viernes a las 9:00, el viernes a las 9:15 o el viernes a las 9:30", repeating the day for slots on the same day. Same call: "Con gusto" twice, and "la doctora Laia Soler" (a hygienist) once, corrected a turn later.
 - **Found by:** reading the chat transcript (Pablo), not by the judge: no pass has run with this prompt.
 - **Root cause (class):** prompt. The example adopted with placeholders (`"Tengo el [día] a las [hora], el [día] a las [hora] o el [día] a las [hora]"`) is copied as a fill-in template, as examples are (ADR-0006, ADR-0007). It covers slots on different days, not the common case of several times on one day.
-- **Fix:** (Pablo) the example now names each day once, with one form for several times on one day ("el [día] a las [hora], a las [hora] o a las [hora]") and one for different days. Not measured: to check in the next pass, together with "Con gusto" and "doctora" (still open).
+- **Fix:** (Pablo) the example now names each day once, with one form for several times on one day ("el [día] a las [hora], a las [hora] o a las [hora]") and one for different days. Measured with hand fixes for "Con gusto", "li puc ajudar" and staff titles in `20261115-205511-final` (gate vs the coach's winner: PASS; `language` 32% → 70%, z 2.8; all criteria 82% → 89%; "doctora" 1 → 0 calls). "Con gusto" still opens 4 of 12 Spanish calls: open.
 - **Regression guard:** none yet (the lint does not catch a repeated day).
 
 
