@@ -41,6 +41,7 @@ _CA = {
     "puc",
     "bon",
     "bona",
+    "bones",  # Catalan greeting, Spanish "buenas" (held-out: "Bones." got a Spanish reply)
     "tinc",
     "perfecte",
     "adéu",

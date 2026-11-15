@@ -470,6 +470,9 @@ async def coach_cmd(
             split_of=split_of,
             prompt=prompt,
         )
+        if not any(c.counted for c in conversations):  # 2026-11-15: Mistral 503 on all 28
+            errors = sorted({(c.error or c.end)[:120] for c in conversations})
+            raise RuntimeError(f"{run_id}: no conversation counted ({'; '.join(errors)})")
         verdicts, _, _ = await _judge_conversations(
             run_id, conversations, "judge", roles["judge"], concurrency
         )

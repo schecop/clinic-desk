@@ -11,6 +11,22 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Regression guard:**
 -->
 
+## 2026-11-15 · A Catalan "Bones." got a Spanish reply
+- **Symptom:** in the coach's passes, `minors-alone` and `joan-elderly-checkup` open with "Bones." and the receptionist answers "¿Buenos días? Para ayudarle, ¿me puede indicar…?" in Spanish (judge, `language`).
+- **Found by:** reading the `language` failures of the kept candidate (`coach-v2`), by hand.
+- **Root cause (class):** tool (language detection). Since the receptionist starts in Spanish (2026-11-15), it switches only when `guess_lang` hears Catalan, and "bones" was not a Catalan marker: zero markers keep the current language. The old Catalan default hid it.
+- **Fix:** "bones" added to the Catalan markers (Spanish says "buenas"). Not measured in a pass (no budget left for one); deterministic and covered by a test.
+- **Regression guard:** `tests/test_language_guard.py::test_a_catalan_bones_is_heard_as_catalan`.
+
+
+## 2026-11-15 · A provider outage killed the coach run after a kept change, without best.md
+- **Symptom:** third coach run (`runs/coach/20261115-185938-coach`): iteration 2 was kept, then the visible pass of iteration 3 died with `RuntimeError: coroutine raised StopIteration`. No `best.md` was written; the change log had iterations 1-2.
+- **Found by:** the run's exit code and traceback.
+- **Root cause (class):** simulator (provider) + code. Mistral answered HTTP 503 ("Service unavailable") to all 28 persona calls, after 4 retries each. With no conversation counted, `analyse` produced no split row and `next(...)` raised; nothing wrote `best.md` on the way out. Cost of the lost iteration: only the proposal (no conversation got past the persona's first call).
+- **Fix:** a pass with no counted conversation raises a clear error naming the causes; the loop writes `best.md` and the change log in a `finally`, so a crash keeps what was decided. `best.md` of this run restored by hand from `candidate.2.md` (the kept change).
+- **Regression guard:** `tests/test_coach.py::test_a_failed_pass_still_leaves_the_best_prompt_and_the_log`.
+
+
 ## 2026-11-15 · "la pugui ajudar" to men, and "amb gust" failed as a Spanish calque
 - **Symptom:** in the first pass with the fixed simulator (`es-baseline`), `language` passes 11/28. Of the 10 Catalan fails, 4 say "Hi ha res més en què la pugui ajudar?" / "En què la puc ajudar?" to a man (senyor Martí, Bosch, Pujol), and 4 open with "Amb (molt) gust l'ajudo", failed by the judge as "a calque of 'con gusto le ayudo'".
 - **Found by:** judge (`language`), failures grouped by cause and by the language the patient spoke.

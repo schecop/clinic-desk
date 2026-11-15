@@ -121,3 +121,10 @@ def test_a_catalan_turn_with_cita_and_an_elision_stays_catalan() -> None:
     turn = "I si demano una cita igualment, m\u2019ho podran mirar allà?"
     assert guess_lang(turn, default="es") == "ca"
     assert guess_lang("Quería pedir una cita para mañana", default="ca") == "es"
+
+
+def test_a_catalan_bones_is_heard_as_catalan() -> None:
+    # held-out pass 2026-11-15: "Bones." got "¿Buenos días? Para ayudarle…" (the desk starts in
+    # Spanish and only switches when it hears Catalan)
+    assert guess_lang("Bones.", default="es") == "ca"  # what the desk switches on
+    assert guess_lang("Buenas.", default="es") == "es"

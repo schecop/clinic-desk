@@ -11,6 +11,7 @@ import pytest
 
 from clinic_desk.coach.loop import (
     Pass,
+    Plan,
     Split,
     coach_loop,
     decide_visible,
@@ -280,3 +281,40 @@ def test_card_failures_count_by_conversation_and_patient() -> None:
         and "6 conversations fail · 3 patients · categories: book, cancel" in brief
     )
     check_failures(Edit(**edit(target="card")), data, CATS)  # "p00 r0" matches "p00 r0 · card_1…"
+
+
+def test_a_failed_pass_still_leaves_the_best_prompt_and_the_log(tmp_path: Path) -> None:
+    # 2026-11-15: Mistral answered 503 to all 28 conversations of iteration 3; the run died
+    # with a kept change from iteration 2 and no best.md
+    good = "Warm and patient. Close by asking if there is anything else."
+    calls = 0
+
+    async def evaluate(prompt: str, split: Split, label: str, repeats: int) -> Pass:
+        nonlocal calls
+        calls += 1
+        if label == "coach-v2":
+            raise RuntimeError(f"{label}: no conversation counted (persona: HTTP 503)")
+        ids = IDS if split == "visible" else HELD_OUT
+        return p(label, first(8, "tone") if prompt == PROMPT else None, ids, repeats)
+
+    async def extend(old: Pass, more: int) -> Pass:
+        raise AssertionError("not promising: z 3+ on the first look")
+
+    async def fake_propose(prompt: str, data: Any, history: str) -> tuple[Edit, str]:
+        e = Edit(**edit(new=good)) if prompt == PROMPT else Edit(**edit(old=good, new=good + "!"))
+        return e, apply_edit(prompt, e, NAMES)
+
+    with pytest.raises(RuntimeError, match="HTTP 503"):
+        asyncio.run(
+            coach_loop(
+                PROMPT,
+                propose=fake_propose,
+                evaluate=evaluate,
+                extend=extend,
+                iterations=3,
+                out=tmp_path,
+                plan=Plan(base_repeats=2),
+            )
+        )
+    assert (tmp_path / "best.md").read_text("utf-8") == PROMPT.replace("Warm and patient.", good)
+    assert "| 1 | tone |" in (tmp_path / "changelog.md").read_text("utf-8")

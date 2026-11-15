@@ -256,51 +256,53 @@ async def coach_loop(
             f.write(entry.model_dump_json() + "\n")
         (out / "changelog.md").write_text(to_markdown(entries, start, best), "utf-8")
 
-    for i in range(1, iterations + 1):
-        try:
-            edit, candidate = await propose(best, vis.data, history_for_coach(entries))
-        except CoachError as err:
-            save(Entry(iteration=i, why=str(err)))
-            continue
-        (out / f"candidate.{i}.md").write_text(candidate, "utf-8")
-        cv = await evaluate(candidate, "visible", f"coach-v{i}", plan.repeats)
-        decision, _ = decide_visible(edit.target, vis, cv)
-        extended = decision.promising and plan.more > 0
-        if extended:
-            cv = await extend(cv, plan.more)
+    try:  # a failed pass (e.g. a provider outage) still leaves best.md and the change log
+        for i in range(1, iterations + 1):
+            try:
+                edit, candidate = await propose(best, vis.data, history_for_coach(entries))
+            except CoachError as err:
+                save(Entry(iteration=i, why=str(err)))
+                continue
+            (out / f"candidate.{i}.md").write_text(candidate, "utf-8")
+            cv = await evaluate(candidate, "visible", f"coach-v{i}", plan.repeats)
             decision, _ = decide_visible(edit.target, vis, cv)
-        ch: Pass | None = None
-        if decision.kept:
-            if ho is None:
-                ho = await evaluate(best, "held_out", "coach-h0", plan.held_out_repeats)
-            ch = await evaluate(candidate, "held_out", f"coach-h{i}", plan.held_out_repeats)
-            decision, _ = decide_held_out(decision, ho, ch)
-        entry = Entry(
-            iteration=i,
-            target=edit.target,
-            pattern=edit.pattern,
-            cause=edit.cause,
-            elsewhere=edit.elsewhere,
-            reason=edit.reason,
-            risk=edit.risk,
-            failures=edit.failures,
-            diff=diff(best, candidate),
-            visible_run=cv.run_id,
-            held_out_run=ch.run_id if ch else "",
-            extended=extended,
-            target_before=_score(vis, edit.target),
-            target_after=_score(cv, edit.target),
-            visible_before=_score(vis, "all"),
-            visible_after=_score(cv, "all"),
-            held_out_before=_score(ho, "all") if ch and ho else "",
-            held_out_after=_score(ch, "all") if ch else "",
-            kept=decision.kept,
-            why=decision.why,
-        )
-        if decision.kept:
-            assert ch is not None
-            best, vis, ho = candidate, cv, ch
-        save(entry)
-    (out / "best.md").write_text(best, "utf-8")
-    (out / "changelog.md").write_text(to_markdown(entries, start, best), "utf-8")
+            extended = decision.promising and plan.more > 0
+            if extended:
+                cv = await extend(cv, plan.more)
+                decision, _ = decide_visible(edit.target, vis, cv)
+            ch: Pass | None = None
+            if decision.kept:
+                if ho is None:
+                    ho = await evaluate(best, "held_out", "coach-h0", plan.held_out_repeats)
+                ch = await evaluate(candidate, "held_out", f"coach-h{i}", plan.held_out_repeats)
+                decision, _ = decide_held_out(decision, ho, ch)
+            entry = Entry(
+                iteration=i,
+                target=edit.target,
+                pattern=edit.pattern,
+                cause=edit.cause,
+                elsewhere=edit.elsewhere,
+                reason=edit.reason,
+                risk=edit.risk,
+                failures=edit.failures,
+                diff=diff(best, candidate),
+                visible_run=cv.run_id,
+                held_out_run=ch.run_id if ch else "",
+                extended=extended,
+                target_before=_score(vis, edit.target),
+                target_after=_score(cv, edit.target),
+                visible_before=_score(vis, "all"),
+                visible_after=_score(cv, "all"),
+                held_out_before=_score(ho, "all") if ch and ho else "",
+                held_out_after=_score(ch, "all") if ch else "",
+                kept=decision.kept,
+                why=decision.why,
+            )
+            if decision.kept:
+                assert ch is not None
+                best, vis, ho = candidate, cv, ch
+            save(entry)
+    finally:
+        (out / "best.md").write_text(best, "utf-8")
+        (out / "changelog.md").write_text(to_markdown(entries, start, best), "utf-8")
     return best, entries
