@@ -13,7 +13,7 @@ An AI phone receptionist for a small dental clinic in Barcelona that speaks Span
   - A **judge** that scores every call against a rubric: an LLM checked against hand labels, plus rules in code.
   - A **regression gate** that blocks a prompt change that makes things worse.
   - A **coach**: an agent that reads the failed calls, proposes one change to the receptionist's instructions, measures it on fresh calls, and keeps it or rolls it back on its own.
-- **The headline result.** The coach found that the receptionist read appointment options as numbered lists, which sounds wrong on the phone. It changed the instructions and **proved the fix on patients it had never seen**: `format` went from 46% to 92% (24 calls per side, z 3.4). A deliberately harmful prompt is stopped by the gate, which names the patients it hurt and why.
+- **The headline result.** The coach found that the receptionist read appointment options as numbered lists, which sounds wrong on the phone. It changed the instructions and **proved the fix on patients it had never seen**: `format` went from 46% to 92% (24 calls per side, z 3.4). A deliberately harmful prompt is stopped by the gate, which names the patients it hurt and why. Overall, the current receptionist passes **89% of the criteria** on the visible patients, up from 78% before the last coach run and hand fixes (same simulator and judge, z 3.1).
 - **What it costs.** About **$0.008 per simulated call** ($0.016 once judged); a full judged test pass of 28 calls costs ~$0.45.
 
 ## Results
