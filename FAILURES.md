@@ -11,6 +11,20 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Regression guard:**
 -->
 
+## 2026-11-15 · The coach's gain on visible did not show on held-out
+- **Symptom:** first coach run (`runs/coach/20261115-152127-coach`, 5 iterations, 2 kept). Visible, start → best: all criteria 65% → 77% (z 2.6). Held-out: 69% → 71% (z 0.2). Per criterion on held-out: tone 25% → 100% (z 3.8) transferred; language 25% → 8% did not (it was 42% after the first change, so it swings); facts_right 100% → 75% (z 1.9, just under the gate).
+- **Found by:** `clinic-desk gate` between the held-out passes of the start and best prompts, after the run.
+- **Root cause (class):** eval design + prompt. (1) Held-out is 6 personas × 2 = 12 conversations: noise per criterion is ~15-20 points, too wide to show a gain smaller than the tone one. (2) Of the 3 new facts_right failures, one copies the coach's own example ("recordi arribar 10 minuts abans per omplir la fitxa i portar el DNI") onto a checkup, a first-visit rule; the same error was in the start's held-out pass too, where the judge passed it. Two call the hygienist "doctora Laia Soler": absent in the start pass, cause not established.
+- **Fix (measurement):** start and best re-measured on held-out with 4 repeats ($0.64; `ho4-start`, `ho4-best`), pooled with the first measurement (≈32-34 conversations per prompt). Tone **replicated**: 28% → 91% (z 5.2). Total 69% → 75% (z 1.3): not proven. Language 19% → 21%: the visible gain did not transfer. facts_right 97% → 91% (z 1.0): the first drop was mostly noise (100% in the new sample). Format 69% → 53% (z 1.3): not significant, worth watching. No hard-line failure. The "doctora" error is still unexplained.
+- **Regression guard:** the gate on held-out, now with 4 repeats when a result has to be trusted.
+
+## 2026-11-15 · Simulated patient rate-limited, conversations lost
+- **Symptom:** two held-out passes back to back (concurrency 4): 6 of 48 conversations ended in `error`, Mistral HTTP 429 "Rate limit exceeded" after 4 attempts, mostly `joan-switch-checkup`.
+- **Found by:** the counted conversations in the gate (20/22 of 24) and `end == error` in the run.
+- **Root cause (class):** simulator (provider rate limit; retries too short for Mistral's window).
+- **Fix:** none yet; errors are excluded from the score, so results stay valid but lose data unevenly (one persona lost 3 of 4). Options: concurrency 2 for back-to-back passes, or a longer backoff on 429.
+- **Regression guard:** none.
+
 ## 2026-11-15 · A per-persona regression gate that fails on noise
 - **Symptom:** the first gate rule (a persona breaks if its mean criteria rate drops by more than max(10 points, its baseline spread), or it loses a code pass) failed 6 of 14 personas comparing calib3 with verify: two passes with a near-identical prompt and the same overall score (65% → 65%).
 - **Found by:** running the gate on two real passes before trusting it on the bad prompt.

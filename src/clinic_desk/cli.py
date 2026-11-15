@@ -21,6 +21,8 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from clinic_desk.clinic import load_clinic
+from clinic_desk.coach.loop import Pass, Split, coach_loop
+from clinic_desk.coach.propose import Edit, failures_brief, name_words, propose
 from clinic_desk.config import ModelChoice, load_config
 from clinic_desk.env import load_env, require
 from clinic_desk.llm.base import AssistantMessage, Message, ToolResults
@@ -46,7 +48,7 @@ from clinic_desk.simulator.gate import compare
 from clinic_desk.simulator.gate import to_markdown as gate_markdown
 from clinic_desk.simulator.judge import Verdict
 from clinic_desk.simulator.persona import load_personas, load_split
-from clinic_desk.simulator.report import analyse, to_html, to_markdown
+from clinic_desk.simulator.report import ReportData, analyse, to_html, to_markdown
 from clinic_desk.simulator.runner import Conversation, RoleModel
 from clinic_desk.simulator.simulate import (
     RUNS,
@@ -369,6 +371,132 @@ def gate_cmd(baseline: str, candidate: str, role: str) -> None:
         raise SystemExit(1)
 
 
+COACH_CALL_USD = Decimal("0.15")  # one proposal, worst case: 2 attempts x ~25k in / ~5k out
+
+
+async def coach_cmd(
+    iterations: int,
+    repeats: int,
+    baseline: str | None,
+    prompt_file: str,
+    concurrency: int,
+    yes: bool,
+) -> None:
+    """The coach loop on real models: prints the estimate, needs --yes, writes runs/coach/<id>/."""
+    load_env()
+    roles = load_config().llm
+    for need in ("receptionist", "persona", "judge", "coach"):
+        if need not in roles:
+            raise SystemExit(f"config: add an llm.{need} role (see config/example.yaml)")
+    clinic = load_clinic()
+    all_personas = load_personas(clinic)
+    split = load_split()
+    split_of = {pid: name for name, ids in split.items() for pid in ids}
+    by_id = {p.id: p for p in all_personas}
+    start = Path(prompt_file).read_text("utf-8")
+
+    vis0 = None
+    if baseline:
+        saved = RUNS / baseline / "prompt.md"
+        if not saved.exists() or saved.read_text("utf-8") != start:
+            raise SystemExit(f"{baseline} did not measure {prompt_file}: drop --baseline")
+
+    used = ["receptionist", "persona", "judge"] + (["translator"] if "translator" in roles else [])
+    prices = {r: (roles[r].usd_per_mtok_in, roles[r].usd_per_mtok_out) for r in used}
+    if "translator" not in roles:
+        prices["translator"] = prices["receptionist"]
+    margin = Decimal("1.2")  # the estimate ran ~12% under the real cost on 2026-11-15
+    per_vis = budget.estimate(len(split["visible"]) * repeats, prices) * margin
+    per_ho = budget.estimate(len(split["held_out"]) * repeats, prices) * margin
+    planned = (
+        per_ho + (0 if baseline else per_vis) + iterations * (per_vis + per_ho + COACH_CALL_USD)
+    )
+    print(
+        f"coach: {iterations} iterations · visible pass ~${per_vis:.2f}, held-out ~${per_ho:.2f},"
+        f" proposal ~${COACH_CALL_USD} · worst case (held-out every time) ~${planned:.2f}"
+    )
+    print(budget.check(planned))
+    if not yes:
+        raise SystemExit("not started: this run costs money; re-run with --yes")
+
+    def role(name: str) -> RoleModel:
+        c = roles[name]
+        return RoleModel(build_llm(c), c.usd_per_mtok_in, c.usd_per_mtok_out)
+
+    models = {
+        name: role(name)
+        for name in ("receptionist", "persona", *(["translator"] if "translator" in roles else []))
+    }
+    exporter = LangfuseExporter.from_env()
+    coach_id = new_run_id("coach")
+    out = Path("runs/coach") / coach_id
+    calls: list[Call] = []
+    coach_llm = Metered(
+        build_llm(roles["coach"]),
+        "coach",
+        roles["coach"].usd_per_mtok_in,
+        roles["coach"].usd_per_mtok_out,
+        calls,
+    )
+    names = name_words([p.caller.name for p in all_personas])
+
+    async def evaluate(prompt: str, which: Split, label: str) -> Pass:
+        print(budget.check(per_vis if which == "visible" else per_ho))  # raises past the cap
+        personas = [by_id[pid] for pid in split[which]]
+        run_id, conversations = await run_pass(
+            personas,
+            receptionist=models["receptionist"],
+            persona_model=models["persona"],
+            translator=models.get("translator"),
+            repeats=repeats,
+            concurrency=concurrency,
+            run_id=new_run_id(f"{coach_id.split('-', 2)[-1]}-{label}"),
+            exporter=exporter,
+            split_of=split_of,
+            prompt=prompt,
+        )
+        verdicts, _, _ = await _judge_conversations(
+            run_id, conversations, "judge", roles["judge"], concurrency
+        )
+        data = analyse(run_id, conversations, verdicts, split_of, by_id, langfuse_trace_url())
+        score = next(s for s in data.splits if s.split != "all").criteria
+        print(f"  {label}: {run_id} · criteria {score}")
+        return Pass(run_id, data, conversations)
+
+    async def propose_one(prompt: str, data: ReportData, history: str) -> tuple[Edit, str]:
+        try:
+            edit, candidate = await propose(coach_llm, prompt, failures_brief(data), history, names)
+        finally:
+            budget.record(calls, f"{coach_id}/coach")
+            calls.clear()
+        print(f"  proposal: target {edit.target} · {edit.reason[:160]}")
+        return edit, candidate
+
+    if baseline:
+        verdicts = load_verdicts(baseline, "judge", RUNS / baseline)
+        conversations = load_run(baseline)
+        data = analyse(baseline, conversations, verdicts, split_of, by_id, langfuse_trace_url())
+        vis0 = Pass(baseline, data, conversations)
+    try:
+        _, entries = await coach_loop(
+            start,
+            propose=propose_one,
+            evaluate=evaluate,
+            iterations=iterations,
+            out=out,
+            visible0=vis0,
+        )
+    finally:
+        for m in models.values():
+            await m.client.aclose()
+        await coach_llm.inner.aclose()
+        if exporter is not None:
+            await exporter.aclose()
+    print((out / "changelog.md").read_text("utf-8"))
+    print(f"saved to {out} · {sum(e.kept for e in entries)} kept · {budget.check(Decimal(0))}")
+    print(f"best prompt: {out / 'best.md'} (prompts/receptionist.md is unchanged)")
+
+
 def label_template_cmd(run_id: str, n: int, force: bool) -> None:
     if LABELS.exists() and not force:
         raise SystemExit(f"{LABELS} exists (hand labels?); use --force to overwrite")
@@ -412,6 +540,13 @@ def main() -> None:
     sim.add_argument("--judge", default="judge", help="config llm role that judges the pass")
     sim.add_argument("--no-judge", action="store_true", help="code checks only, no judge")
     sim.add_argument("--prompt", help="receptionist prompt file (default prompts/receptionist.md)")
+    co = sub.add_parser("coach", help="coach loop: one prompt change at a time (paid)")
+    co.add_argument("--iterations", type=int, default=5)
+    co.add_argument("--repeats", type=int, default=2)
+    co.add_argument("--baseline", help="a judged visible pass of the start prompt, to reuse")
+    co.add_argument("--prompt", default="prompts/receptionist.md", help="start prompt")
+    co.add_argument("--concurrency", type=int, default=4)
+    co.add_argument("--yes", action="store_true", help="run even though it costs money")
     gat = sub.add_parser("gate", help="regression gate: candidate pass vs baseline (free)")
     gat.add_argument("baseline")
     gat.add_argument("candidate")
@@ -434,6 +569,17 @@ def main() -> None:
         asyncio.run(judge_run(args.run_id, args.role, args.labelled, args.concurrency, args.yes))
     if args.command == "report":
         report_cmd(args.run_id, args.role)
+    if args.command == "coach":
+        asyncio.run(
+            coach_cmd(
+                args.iterations,
+                args.repeats,
+                args.baseline,
+                args.prompt,
+                args.concurrency,
+                args.yes,
+            )
+        )
     if args.command == "gate":
         gate_cmd(args.baseline, args.candidate, args.role)
     if args.command == "label-template":

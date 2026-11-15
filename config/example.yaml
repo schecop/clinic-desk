@@ -13,6 +13,8 @@ llm:
   # judge: { provider: gemini, model: ..., options: { reasoning_effort: low }, usd_per_mtok_in: ..., usd_per_mtok_out: ... }
   # structured_output: tool (default: a record_verdict tool call) | json (JSON in the text, for models
   # that cannot reason and call tools in one request, e.g. GPT-5.x on Chat Completions):
+  # coach: proposes one prompt change at a time (clinic-desk coach); needs tool use and reasoning
+  # coach: { provider: anthropic, model: ..., options: { output_config: { effort: medium } }, usd_per_mtok_in: ..., usd_per_mtok_out: ... }
   # judge_gpt: { provider: openai, model: ..., structured_output: json, options: { reasoning_effort: low, response_format: { type: json_object } }, ... }
 
 # How the receptionist gets the clinic's policies (ADR-0003)
