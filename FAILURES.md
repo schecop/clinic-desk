@@ -2,6 +2,8 @@
 
 Every real failure: symptom, how it was found (trace, judge, test), root cause class (prompt, tool, retrieval, model, simulator, judge), fix, and the regression test or eval case added. Newest first.
 
+**25 failures by root cause (first class named):** tool 7 · simulator 6 · prompt 5 · model 2 · graph 2 · eval design 2 · fixture data 1. A third of them were in the test harness, not in the receptionist: the simulator (persona drift, provider outages, rate limits) and the eval design (noise mistaken for regressions). Measure the measuring tools first.
+
 <!-- Template:
 ## YYYY-MM-DD · short title
 - **Symptom:**
