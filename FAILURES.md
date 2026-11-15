@@ -2,7 +2,7 @@
 
 Every real failure: symptom, how it was found (trace, judge, test), root cause class (prompt, tool, retrieval, model, simulator, judge), fix, and the regression test or eval case added. Newest first.
 
-**26 failures by root cause (first class named):** tool 8 · simulator 6 · prompt 5 · model 2 · graph 2 · eval design 2 · fixture data 1. A third of them were in the test harness, not in the receptionist: the simulator (persona drift, provider outages, rate limits) and the eval design (noise mistaken for regressions). Measure the measuring tools first.
+**27 failures by root cause (first class named):** tool 8 · simulator 6 · prompt 6 · model 2 · graph 2 · eval design 2 · fixture data 1. A third of them were in the test harness, not in the receptionist: the simulator (persona drift, provider outages, rate limits) and the eval design (noise mistaken for regressions). Measure the measuring tools first.
 
 <!-- Template:
 ## YYYY-MM-DD · short title
@@ -12,6 +12,14 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Fix:**
 - **Regression guard:**
 -->
+
+## 2026-11-15 · The placeholder example is copied as a template: "el viernes a las 9:00, el viernes a las 9:15…"
+- **Symptom:** in a hand-run chat on the Google test calendar, the receptionist offered "Tengo el viernes a las 9:00, el viernes a las 9:15 o el viernes a las 9:30", repeating the day for slots on the same day. Same call: "Con gusto" twice, and "la doctora Laia Soler" (a hygienist) once, corrected a turn later.
+- **Found by:** reading the chat transcript (Pablo), not by the judge: no pass has run with this prompt.
+- **Root cause (class):** prompt. The example adopted with placeholders (`"Tengo el [día] a las [hora], el [día] a las [hora] o el [día] a las [hora]"`) is copied as a fill-in template, as examples are (ADR-0006, ADR-0007). It covers slots on different days, not the common case of several times on one day.
+- **Fix:** (Pablo) the example now names each day once, with one form for several times on one day ("el [día] a las [hora], a las [hora] o a las [hora]") and one for different days. Not measured: to check in the next pass, together with "Con gusto" and "doctora" (still open).
+- **Regression guard:** none yet (the lint does not catch a repeated day).
+
 
 ## 2026-11-15 · CI failed before collecting a test
 - **Symptom:** the first GitHub Actions run passed ruff and mypy, then `pytest` exited with code 3: `Error while loading plugin "pytest11"` … `DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated`.
