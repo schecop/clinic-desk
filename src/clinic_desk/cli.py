@@ -106,14 +106,28 @@ async def calendar_seed() -> None:
             print(f"{a.id} -> {stored.id} · {a.service_id} {a.staff_id} {a.start:%a %d %b %H:%M}")
 
 
+def record_chat(calls: list[Call], ledger: Path = budget.LEDGER) -> str:
+    """Book a chat's model calls in the budget ledger, like any pass; the line to print."""
+    usd = budget.record(calls, new_run_id("chat"), ledger)
+    total = budget.spent(ledger)
+    cap = budget.CAP_USD
+    return f"[chat cost: {len(calls)} model calls · ${usd:.4f} · spent ${total:.2f} of ${cap}]"
+
+
 async def chat(now: datetime, lang: str, trace: bool, calendar: str = "fake") -> None:
     load_env()
     config = load_config()
     roles, settings = config.llm, config.receptionist
     choice = roles["receptionist"]
-    llm = build_llm(choice)
+    calls: list[Call] = []  # metered like the simulator, so the $15 cap sees chats too
+    print(budget.check(Decimal(0)))  # refuses to start once the cap is reached
+
+    def metered(role: str, c: ModelChoice) -> Metered:
+        return Metered(build_llm(c), role, c.usd_per_mtok_in, c.usd_per_mtok_out, calls)
+
+    llm = metered("receptionist", choice)
     # the language guard's model; without its own role it reuses the receptionist's
-    translator = build_llm(roles["translator"]) if "translator" in roles else None
+    translator = metered("translator", roles["translator"]) if "translator" in roles else None
     embed_client, retriever = None, None
     if settings.policies == "search" and settings.retriever != "bm25":
         embed_client, retriever = await _dense_retriever(settings.retriever)
@@ -159,7 +173,9 @@ async def chat(now: datetime, lang: str, trace: bool, calendar: str = "fake") ->
         upcoming = await _summary(receptionist)
         if google_http is not None:
             await google_http.aclose()
+        cost = record_chat(calls)
     print(f"\nupcoming in the {calendar} calendar: {upcoming}")
+    print(cost)
 
 
 async def _dense_retriever(model: str) -> tuple[httpx.AsyncClient, Dense]:

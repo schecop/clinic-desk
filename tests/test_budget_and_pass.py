@@ -102,3 +102,15 @@ def test_more_repeats_go_into_the_same_pass_after_the_ones_it_has(tmp_path: Path
     assert go(0) == [0, 1] and go(2) == [2, 3]
     saved = sorted(f.name for f in (tmp_path / "test").glob("*.json"))
     assert saved == [f"{persona.id}.r{r}.json" for r in range(4)]
+
+
+def test_a_chat_books_its_calls_in_the_ledger_like_a_pass(tmp_path: Path) -> None:
+    # chats called the model directly and never reached the ledger: the $15 cap missed them
+    from clinic_desk.cli import record_chat
+
+    ledger = tmp_path / "cost.jsonl"
+    ledger.write_text(json.dumps({"usd": "1.00"}) + "\n", "utf-8")
+    line = record_chat([paid("0.0008"), paid("0.0007"), paid("0", "translator")], ledger)
+    assert line == "[chat cost: 3 model calls · $0.0015 · spent $1.00 of $15]"
+    rows = [json.loads(r) for r in ledger.read_text("utf-8").splitlines()]
+    assert len(rows) == 3 and rows[-1]["run"].endswith("-chat")
