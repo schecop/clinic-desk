@@ -20,7 +20,7 @@ Fixed before the next run (Pablo, 2026-11-15).
 **Coach (`prompts/coach.md`, `coach/propose.py`):**
 - It reads the failures counted per criterion (conversations, patients, categories), the lint's exact patterns counted by code, and the judge's findings with each patient's category.
 - Strategy, in order: group into patterns; diagnose the cause (missing rule, ignored rule, copied example, or not the prompt: code, judge or simulator); pick the biggest pattern a prompt change can fix; check the history.
-- Writing: say what to do, not only what to avoid; rewrite an existing rule instead of adding a second one; use neutral examples (no gender, names, dates or prices).
+- Writing: say what to do, not only what to avoid; rewrite an existing rule instead of adding a second one; neutral examples: placeholders for data from a tool or the patient ("el [día] a las [hora]"), gender-free wording or both forms (Pablo, after the first run copied "lunes a las 9:00" into the prompt).
 - New fields: `pattern`, `cause`, `elsewhere` (failures it thinks are not for the prompt, logged for a person to review).
 - **Code check against overfitting:** the conversations listed in `failures` must be real failures of the target, from at least 3 patients in at least 2 persona categories. Otherwise the proposal is sent back before anything is spent.
 
@@ -35,3 +35,5 @@ Fixed before the next run (Pablo, 2026-11-15).
 - A coach run costs more up front (the start is ~$0.9 instead of ~$0.45) and less per rejected candidate.
 - A kept candidate's pass becomes the next baseline with 2 or 4 repeats, so later iterations have less power than the first. Winner's curse as in ADR-0006.
 - The held-out check with 4 repeats per side (~24 conversations) doubles as the final held-out measurement for a winner.
+- **First run (`runs/coach/20261115-185938-coach`, cut after 2 of 3 iterations by a Mistral outage, ~$2.2):** the start was topped up from 2 to 4 repeats (reused). Iteration 1 (language: "claro/por supuesto" instead of "con gusto") rose z 0.4 and was rolled back without more repeats. Iteration 2 (format: options in one spoken sentence, no lists; the coach counted 15 list failures across 8+ patients) rose z 2.8 on the first look and was kept: visible format 55% → 86%; **held-out format 46% → 92% (z 3.4)**, held-out all criteria 79% → 86% (z 1.6, not proven), no regression. `language` fell on both splits (visible 45% → 32%, held-out 71% → 54%, z 1.2 each): within the noise, but in the same direction twice; to watch. The kept example names days and times, against the coach's own instructions.
+

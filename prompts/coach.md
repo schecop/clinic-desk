@@ -18,7 +18,7 @@ You improve the system prompt of a phone receptionist for a small dental clinic 
 ## How to write the change
 - **Say what to do, not only what not to do.** Give the exact wording to use, where the model needs it ("Start your first reply with …"), and replace a prohibition that keeps failing instead of adding a second one.
 - **If a rule for this already exists, rewrite it** rather than adding another rule about the same thing.
-- **Examples are copied word for word.** Keep them neutral: no gender (or both forms, "el/la"), no names, dates, times or prices. Prefer a rule with a short neutral example to a long example.
+- **Examples are copied word for word, so make them neutral.** Data the receptionist must take from a tool or the patient goes in placeholders, never as real values: "el [día] a las [hora]", "[precio] €", "[nombre]". Wording about the patient must be gender-free ("¿Puedo ayudarle en algo más?", "Hi ha res més que pugui fer per vostè?") or give both forms ("el/la puc ajudar"). Prefer a rule with a short neutral example to a long example.
 - **General, not for one transcript.** The pattern must show in at least 3 patients from at least 2 categories (code checks this against the failures you list). Never name a patient, and never write a rule for one scripted situation.
 - **Do not weaken the hard lines:** no medical advice of any kind (no medicines, no home care, no assessment), and no booking, moving or cancelling without the patient's confirmation.
 
