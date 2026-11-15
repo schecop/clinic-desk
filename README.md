@@ -62,7 +62,7 @@ The change logs and per-pass reports (markdown and interactive HTML, each conver
 | Coach: one exact edit, keep rule fixed before the run (ADR-0006) | Each gain can be traced to one change; a keep rule set after seeing the results is cherry-picking |
 | Sequential measurement; the coach counts patterns and must cite 3+ patients in 2+ categories (ADR-0007) | A +19-point gain scored z 1.5 with 2 repeats. Extra repeats go only to promising candidates, and a rule written for one transcript is refused before any money is spent |
 | The simulated patient chooses its language; coverage is reported, not enforced | Real callers switch languages. The earlier simulator mirrored the receptionist, and for days most calls were in Catalan without anyone noticing |
-| Tests never call live models | A scripted fake model drives the real graph and loops: 222 tests, no API key |
+| Tests never call live models | A scripted fake model drives the real graph and loops: 222 tests, no API key, run in CI (GitHub Actions: ruff, mypy, pytest) |
 
 ## Limits
 
@@ -72,7 +72,6 @@ The change logs and per-pass reports (markdown and interactive HTML, each conver
 - **The receptionist model was not compared** with alternatives, and p95 latency (3.1 s) is above the 2 s target for voice.
 - **The hard-line floor of the gate was set after seeing one bad prompt**; it needs a second bad prompt to be validated.
 - **The judge was calibrated on 20 conversations, 18 of them Catalan** (before the simulator fix). Its Spanish verdicts are less validated.
-- **CI** (GitHub Actions: ruff, mypy, pytest on fake models) passes on a clean local clone, with no keys, no `runs/` and no private files; it has not run on GitHub yet.
 - **Google Calendar adapter (OAuth) not built**; everything runs against the in-memory fake calendar.
 
 ## Run it
