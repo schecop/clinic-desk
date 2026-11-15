@@ -2,7 +2,7 @@
 
 Every real failure: symptom, how it was found (trace, judge, test), root cause class (prompt, tool, retrieval, model, simulator, judge), fix, and the regression test or eval case added. Newest first.
 
-**25 failures by root cause (first class named):** tool 7 · simulator 6 · prompt 5 · model 2 · graph 2 · eval design 2 · fixture data 1. A third of them were in the test harness, not in the receptionist: the simulator (persona drift, provider outages, rate limits) and the eval design (noise mistaken for regressions). Measure the measuring tools first.
+**26 failures by root cause (first class named):** tool 8 · simulator 6 · prompt 5 · model 2 · graph 2 · eval design 2 · fixture data 1. A third of them were in the test harness, not in the receptionist: the simulator (persona drift, provider outages, rate limits) and the eval design (noise mistaken for regressions). Measure the measuring tools first.
 
 <!-- Template:
 ## YYYY-MM-DD · short title
@@ -12,6 +12,14 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Fix:**
 - **Regression guard:**
 -->
+
+## 2026-11-15 · CI failed before collecting a test
+- **Symptom:** the first GitHub Actions run passed ruff and mypy, then `pytest` exited with code 3: `Error while loading plugin "pytest11"` … `DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated`.
+- **Found by:** the CI run (`gh run view --log-failed`). A clean local clone had passed, on Python 3.12.
+- **Root cause (class):** tool (environment). The runner's default Python is 3.14; langsmith's pytest plugin (pulled in by LangGraph) calls a function deprecated in 3.14, and `filterwarnings = ["error"]` turns that into a load error.
+- **Fix:** CI pinned to Python 3.12, as locally (`setup-uv` `python-version`).
+- **Regression guard:** the CI run itself.
+
 
 ## 2026-11-15 · A Catalan "Bones." got a Spanish reply
 - **Symptom:** in the coach's passes, `minors-alone` and `joan-elderly-checkup` open with "Bones." and the receptionist answers "¿Buenos días? Para ayudarle, ¿me puede indicar…?" in Spanish (judge, `language`).
