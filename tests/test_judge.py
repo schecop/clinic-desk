@@ -161,3 +161,8 @@ def test_the_report_scores_splits_criteria_personas_and_failures() -> None:
     assert page.startswith("<!doctype html>") and "prefers-color-scheme:dark" in page
     assert "card_1: Si pregunta por el coste" in page and "http" not in page.split("<script>")[1]
     assert f'data-persona="{CARMEN.id}"' in page and 'data-crit="tone"' in page
+
+
+def test_the_spanish_con_gusto_rule_does_not_reach_catalan() -> None:
+    # es-baseline: 4 Catalan fails for "amb gust l'ajudo", read as a calque of "con gusto"
+    assert "Catalan 'amb (molt de) gust' is correct" in RUBRIC["language"]

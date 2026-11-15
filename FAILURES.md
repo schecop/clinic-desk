@@ -11,6 +11,13 @@ Every real failure: symptom, how it was found (trace, judge, test), root cause c
 - **Regression guard:**
 -->
 
+## 2026-11-15 · "la pugui ajudar" to men, and "amb gust" failed as a Spanish calque
+- **Symptom:** in the first pass with the fixed simulator (`es-baseline`), `language` passes 11/28. Of the 10 Catalan fails, 4 say "Hi ha res més en què la pugui ajudar?" / "En què la puc ajudar?" to a man (senyor Martí, Bosch, Pujol), and 4 open with "Amb (molt) gust l'ajudo", failed by the judge as "a calque of 'con gusto le ayudo'".
+- **Found by:** judge (`language`), failures grouped by cause and by the language the patient spoke.
+- **Root cause (class):** prompt + judge. (1) The closing question we added when adopting the coach's prompt has a fixed feminine example ("la pugui ajudar"); the receptionist copies it word for word, whatever the patient's gender, although the prompt says to match it (the example-copying risk of ADR-0006). (2) The rubric's Spain-Spanish rule ("'con gusto le ayudo' fails") was applied to its Catalan translation; "amb (molt de) gust" is correct Catalan (Pablo).
+- **Fix:** the example is now gender-free ("Hi ha res més que pugui fer per vostè?"); the rubric says the "con gusto" rule is for Spanish only. The baseline is re-judged with the new rubric before the gate, so both sides use the same judge.
+- **Regression guard:** `tests/test_judge.py::test_the_spanish_con_gusto_rule_does_not_reach_catalan`; the next pass + gate against the re-judged `es-baseline`.
+
 ## 2026-11-15 · Spanish-speaking patients answer in Catalan from the first turn
 - **Symptom:** in `verify` and `adopted`, 49 and 37 of ~200 patient turns are not in the card's language. Always the same personas, all `language: { start: es }`: carmen-move-afternoon, diagnosis-demand, new-patient-checkup, pedro-vague-cleaning, root-canal-installments, saturday-cleaning. Pedro's card is Spanish; his first line is "Bon dia, miri, vull demanar una neteja".
 - **Found by:** checking the language guard for the D2 exit check (Pablo asked why the row was still open): the guard's 5 translations were all on Spanish-card personas speaking Catalan. `persona_lang_ok` is computed on every turn but only shown as a trace tag, never in the summary, report or gate, so it went unnoticed since D3.

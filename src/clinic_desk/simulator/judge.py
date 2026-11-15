@@ -56,6 +56,7 @@ RUBRIC: dict[str, str] = {
         " 'li puc ajudar' fails: 'ajudar' takes a direct object, 'la/el puc ajudar'), calques"
         " ('quan abans millor'). Catalan is the standard Catalan of Barcelona (no 'tenc')."
         " Spanish is the Spanish of Spain, not Latin American ('con gusto le ayudo' fails)."
+        " That rule is about Spanish only: Catalan 'amb (molt de) gust' is correct Catalan."
         " One such word or error in any turn fails. Names do not count."
     ),
     "format": (
