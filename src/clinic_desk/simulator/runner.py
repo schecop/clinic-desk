@@ -23,9 +23,9 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 
 from clinic_desk.clinic import Lang
-from clinic_desk.llm.base import LLMClient, Message, UserMessage
+from clinic_desk.llm.base import LLMClient, LLMResponse, Message, UserMessage
 from clinic_desk.llm.metered import Call, Metered
-from clinic_desk.receptionist.graph import Receptionist, make_desk
+from clinic_desk.receptionist.graph import Receptionist, greeting, make_desk
 from clinic_desk.receptionist.language import clear_lang
 from clinic_desk.receptionist.state import ToolEvent
 from clinic_desk.retrieval.base import Retriever
@@ -40,7 +40,8 @@ from clinic_desk.simulator.persona import Persona
 
 PERSONA_PROMPT = Path("prompts/persona.md")
 DEFAULT_NOW = datetime(2026, 11, 11, 10, 0, tzinfo=ZoneInfo("Europe/Madrid"))
-GREETING = "Clínica Dental Arrel, bon dia."
+# runs before 2026-11-15 were greeted in Catalan and did not save it: the default reads them right
+OLD_GREETING = "Clínica Dental Arrel, bon dia."
 # room to reason before the line: Gemma 4 always thinks first (stripped by the adapter)
 PERSONA_MAX_TOKENS = 1500
 _END = re.compile(r"\[(DONE|HANGUP)\]")
@@ -68,7 +69,7 @@ class Turn(BaseModel):
     false_claim: bool = False  # says done, and nothing has been written so far
     claim_blocked: bool = False  # the graph's guard stopped a false "done" (patient never heard it)
     reply_lang_ok: bool = True
-    persona_lang_ok: bool = True
+    persona_lang_ok: bool = True  # information only: the patient may leave its card's language
     start_ns: int = 0  # from the persona's call to the receptionist's reply (for traces)
     end_ns: int = 0
 
@@ -85,6 +86,7 @@ class Conversation(BaseModel):
     calls: list[Call] = []
     tools: list[ToolEvent] = []  # the receptionist's tool calls, in order (for the judge too)
     trace_id: str | None = None  # Langfuse trace, when exported
+    greeting: str = OLD_GREETING  # the desk's opening line, before the patient speaks
 
     @property
     def usd(self) -> Decimal:
@@ -118,6 +120,16 @@ class Conversation(BaseModel):
         )
 
 
+async def _persona_line(patient: Metered, system: str, messages: list[Message]) -> LLMResponse:
+    for _ in range(2):  # an empty line (reasoning cut by max_tokens) gets one retry
+        response = await patient.complete(
+            system=system, messages=messages, max_tokens=PERSONA_MAX_TOKENS
+        )
+        if response.text.strip():
+            break
+    return response
+
+
 def persona_system(persona: Persona) -> str:
     card = {
         "name": persona.caller.name,
@@ -139,7 +151,11 @@ def persona_system(persona: Persona) -> str:
             f" to {_LANG_RULE[plan.switch_to]} for the rest of the call, without explaining why."
         )
     else:
-        rule = f"Speak only {_LANG_RULE[plan.start]}, whatever language the receptionist uses."
+        rule = (
+            f"Your character's usual language is {_LANG_RULE[plan.start]}: start the call in it."
+            " After that, speak as this person would in real life: you decide your language,"
+            " the receptionist's language does not decide it for you."
+        )
     template = PERSONA_PROMPT.read_text(encoding="utf-8")
     return template.replace("{card}", lines).replace("{language_rule}", rule)
 
@@ -173,10 +189,11 @@ async def run_conversation(
     desk.tool_log = []
     tz = ZoneInfo(desk.clinic.timezone)
     before = desk.store.snapshot()
-    desk_side = Receptionist(desk, persona.language.start)
+    desk_side = Receptionist(desk)  # Spain Spanish until it hears Catalan: it never sees the card
     patient = meter("persona", persona_model)
     system = persona_system(persona)
-    history: list[Message] = [UserMessage(GREETING)]
+    opening = greeting(desk.clinic)
+    history: list[Message] = [UserMessage(opening)]
     turns: list[Turn] = []
     end: End = "turn_cap"
     error: str | None = None
@@ -184,13 +201,10 @@ async def run_conversation(
 
     for n in range(1, persona.max_turns + 1):
         turn_start = time.time_ns()
+        plan = persona.language
+        want = plan.expected(n)
         try:
-            for _ in range(2):  # an empty line (reasoning cut by max_tokens) gets one retry
-                response = await patient.complete(
-                    system=system, messages=history, max_tokens=PERSONA_MAX_TOKENS
-                )
-                if response.text.strip():
-                    break
+            response = await _persona_line(patient, system, history)
         except Exception as exc:  # e.g. a free tier timing out: this call fails, not the pass
             end, error = "error", f"persona: {type(exc).__name__}: {exc}"
             break
@@ -201,9 +215,9 @@ async def run_conversation(
             turns.append(Turn(n=n, start_ns=turn_start, end_ns=time.time_ns(), patient=said))
             end = "simulator_failure"
             break
-        found = clear_lang(said)
-        plan = persona.language
-        persona_lang_ok = plan.mixes or found in (None, plan.expected(n))
+        # the patient is free to leave its card's language, as real people do: recorded, not
+        # enforced; the receptionist is checked against what was actually said (Pablo, 2026-11-15)
+        persona_lang_ok = plan.mixes or clear_lang(said) in (None, want)
         if marker and not said:
             turns.append(
                 Turn(
@@ -277,6 +291,7 @@ async def run_conversation(
         category=persona.category,
         repeat=repeat,
         end=end,
+        greeting=opening,
         turns=turns,
         calendar_ok=calendar_ok,
         calendar_why=why,
@@ -288,7 +303,7 @@ async def run_conversation(
 
 def transcript(c: Conversation) -> str:
     """The conversation as text, with the code checks inline: for reading and for the judge."""
-    lines = [f"# {c.persona_id} (repeat {c.repeat}) · end {c.end}", f"desk> {GREETING}"]
+    lines = [f"# {c.persona_id} (repeat {c.repeat}) · end {c.end}", f"desk> {c.greeting}"]
     for t in c.turns:
         lines.append(f"[{t.n}] patient> {t.patient}")
         if t.desk:

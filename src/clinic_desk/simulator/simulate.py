@@ -18,6 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from clinic_desk.receptionist.graph import load_prompt
+from clinic_desk.receptionist.language import clear_lang
 from clinic_desk.simulator import budget
 from clinic_desk.simulator.judge import Verdict
 from clinic_desk.simulator.persona import Persona
@@ -101,6 +102,14 @@ def _pct(values: list[float], q: float) -> float:
     return statistics.quantiles(values, n=100, method="inclusive")[int(q) - 1]
 
 
+def _spoken(c: Conversation) -> str:
+    """The language(s) the patient actually spoke in a conversation."""
+    found = {lang for t in c.turns if (lang := clear_lang(t.patient))}
+    if len(found) > 1:
+        return "both"
+    return {"es": "Spanish", "ca": "Catalan"}.get(next(iter(found), ""), "unclear")
+
+
 def summary(
     run_id: str,
     conversations: list[Conversation],
@@ -112,6 +121,10 @@ def summary(
     seconds = [t.seconds for c in conversations for t in c.turns if t.desk]
     ends = Counter(c.end for c in conversations)
     translated = sum(t.lang_fix == "translated" for c in conversations for t in c.turns)
+    spoken = Counter(_spoken(c) for c in counted)
+    off_card = sorted(
+        {c.persona_id for c in counted if not all(t.persona_lang_ok for t in c.turns)}
+    )
     p50, p95 = _pct(seconds, 50), _pct(seconds, 95)
     lines = [
         f"# Simulator pass {run_id}",
@@ -124,6 +137,11 @@ def summary(
         f" · claims blocked by the guard: {sum(c.claims_blocked for c in conversations)}"
         f" · language misses: {sum(c.language_misses for c in conversations)}"
         f" · translations: {translated}",
+        # the patient is free to change language: measured, not enforced, so we know what was
+        # tested (FAILURES: Spanish cards drifting to Catalan)
+        "- Patients spoke: "
+        + " · ".join(f"{k} {spoken[k]}" for k in ("Spanish", "Catalan", "both", "unclear"))
+        + f" · off their card: {', '.join(off_card) or 'none'}",
         f"- Cost: ${cost:.4f} (${cost / max(len(conversations), 1):.4f} per conversation)",
         f"- Receptionist latency per turn: p50 {p50:.1f}s · p95 {p95:.1f}s",
     ]

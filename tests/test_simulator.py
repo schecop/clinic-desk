@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from clinic_desk.clinic import load_clinic
-from clinic_desk.llm.base import LLMResponse, ToolResults
+from clinic_desk.llm.base import LLMResponse, ToolResults, UserMessage
 from clinic_desk.llm.scripted import Request, ScriptedLLM, Step, call, say
 from clinic_desk.simulator.checks import changes, check_calendar, claims_write, persona_broke
 from clinic_desk.simulator.persona import CalendarExpect, load_personas, load_split, make_split
@@ -237,3 +237,65 @@ def test_persona_prompt_has_the_card_and_the_language_plan() -> None:
     system = persona_system(persona("joan-switch-checkup"))
     assert "600 000 001" in system and "{card}" not in system
     assert "first 2 turns, then switch to Catalan" in system
+
+
+CATALAN_OPENING = say("Bon dia, voldria canviar la meva revisió. El meu telèfon és el 600 000 002.")
+
+
+def run_scripted(pid: str, desk: list[Any], patient: list[Any]) -> tuple[Any, ScriptedLLM]:
+    model = ScriptedLLM(patient)
+    c = asyncio.run(
+        run_conversation(
+            persona(pid),
+            receptionist=RoleModel(ScriptedLLM(desk)),
+            persona_model=RoleModel(model),
+        )
+    )
+    return c, model
+
+
+def test_the_desk_greets_in_spain_spanish_whatever_the_card() -> None:
+    c, model = run_scripted("aina-late-cancel", [], [say("[HANGUP]")])  # a Catalan card
+    first = model.requests[0].messages[0]
+    assert isinstance(first, UserMessage) and first.content == "Clínica Dental Arrel, buenos días."
+    assert c.greeting == first.content
+    assert transcript(c).splitlines()[1] == "desk> Clínica Dental Arrel, buenos días."
+
+
+def test_a_patient_off_its_card_language_is_free_and_recorded() -> None:
+    # Pablo: the patient chooses its language, as in real life; nothing is asked again
+    ca_desk = [say("D'acord, quin dia li va bé?"), say("[HANGUP]")]
+    c, model = run_scripted("carmen-move-afternoon", ca_desk, [CATALAN_OPENING, say("[HANGUP]")])
+    assert len(model.requests) == 2 and c.counted  # no retry, no simulator failure
+    assert not c.turns[0].persona_lang_ok and c.turns[0].reply_lang_ok
+
+
+def test_the_persona_prompt_gives_a_usual_language_not_an_order() -> None:
+    system = persona_system(persona("carmen-move-afternoon"))
+    assert "usual language is Spanish: start the call in it" in system
+    assert "Speak only" not in system
+
+
+def test_the_summary_reports_the_languages_spoken_and_who_left_the_card() -> None:
+    from clinic_desk.simulator.simulate import summary
+
+    es, _ = run_scripted("carmen-move-afternoon", CARMEN_DESK, CARMEN_PATIENT)
+    ca, _ = run_scripted(
+        "carmen-move-afternoon", [say("[HANGUP]")], [CATALAN_OPENING, say("[HANGUP]")]
+    )
+    text = summary("run", [es, ca])
+    line = "- Patients spoke: Spanish 1 · Catalan 1 · both 0 · unclear 0"
+    assert f"{line} · off their card: carmen-move-afternoon" in text
+
+
+def test_the_desk_never_sees_the_card_language_it_starts_in_spanish() -> None:
+    # "Hola." is both Spanish and Catalan: only the card could tell, and the desk must not know it
+    desk = ScriptedLLM([say("¿En qué puedo ayudarle?")])
+    asyncio.run(
+        run_conversation(
+            persona("aina-late-cancel"),  # a Catalan card
+            receptionist=RoleModel(desk),
+            persona_model=RoleModel(ScriptedLLM([say("Hola."), say("[HANGUP]")])),
+        )
+    )
+    assert "- Reply language: Spanish." in desk.requests[0].system

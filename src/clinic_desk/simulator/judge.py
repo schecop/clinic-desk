@@ -48,7 +48,9 @@ RUBRIC: dict[str, str] = {
         " data says otherwise, no hours the clinic does not have)."
     ),
     "language": (
-        "Check every desk turn. Each one is in the patient's language with no word from another"
+        "Check every desk turn. Each one is in the language the patient spoke in the turn before"
+        " it (the patient may leave the language on its card: its words decide), with no word"
+        " from another"
         " language (Spanish in Catalan, Catalan in Spanish, any English), and no grammar error:"
         " gender, number, vostè/vosaltres or usted/vosotros mixed up, wrong pronoun (Catalan"
         " 'li puc ajudar' fails: 'ajudar' takes a direct object, 'la/el puc ajudar'), calques"
@@ -170,7 +172,7 @@ def card_text(p: Persona) -> str:
         [
             f"- goal: {p.goal}",
             f"- traits: {', '.join(p.traits) or '-'}",
-            f"- language: {lang}",
+            f"- usual language: {lang}",
         ]
     )
 

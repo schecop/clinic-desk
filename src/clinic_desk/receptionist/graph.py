@@ -52,6 +52,14 @@ from clinic_desk.scheduling.models import Appointment
 from clinic_desk.scheduling.scheduler import Scheduler, SchedulingError
 
 PROMPT_PATH = Path("prompts/receptionist.md")
+DEFAULT_LANG: Lang = "es"  # Spain Spanish until the patient speaks Catalan (Pablo, 2026-11-15)
+
+
+def greeting(clinic: Clinic) -> str:
+    """How the desk answers the phone: in the default language, before it hears the patient."""
+    return f"{clinic.name}, buenos días."
+
+
 MAX_UNCLEAR = 3  # replies in a row that are neither yes nor no before a proposal is dropped
 
 HANDOFF: dict[Lang, str] = {
@@ -386,7 +394,7 @@ def build_graph(desk: Desk) -> CompiledStateGraph[State, None, State, State]:
 class Receptionist:
     """One conversation: feed it the patient's turns, get back what the receptionist says."""
 
-    def __init__(self, desk: Desk, lang: Lang = "es") -> None:
+    def __init__(self, desk: Desk, lang: Lang = DEFAULT_LANG) -> None:
         self.desk = desk
         self.state = new_state(lang)
         self._graph = build_graph(desk)
