@@ -1,4 +1,4 @@
-"""`clinic-desk chat`: talk to the receptionist on the seeded fake calendar.
+"""`clinic-desk chat`: talk to the receptionist on the fake calendar or the Google test calendar.
 
 Uses the receptionist model from config (`llm.receptionist`), so it calls a real (paid) API.
 The clock is fixed (default Wed 11 Nov 2026, 10:00) so the seeded appointments make sense.
@@ -13,7 +13,8 @@ import asyncio
 import json
 import sys
 import time
-from datetime import datetime
+import webbrowser
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -33,6 +34,9 @@ from clinic_desk.receptionist.state import State
 from clinic_desk.retrieval import BM25, Overlap, Retriever, chunks_from
 from clinic_desk.retrieval.dense import Dense, cached, openai_embedder
 from clinic_desk.retrieval.evaluate import all_in_prompt_tokens, evaluate, load_questions, report
+from clinic_desk.scheduling.fake import load_seed
+from clinic_desk.scheduling.google_calendar import GoogleCalendarStore, check_test_calendar
+from clinic_desk.scheduling.google_oauth import Client, Token, TokenSource, authorize
 from clinic_desk.simulator import budget
 from clinic_desk.simulator.calibration import (
     LABELS,
@@ -63,7 +67,46 @@ from clinic_desk.tracing import LangfuseExporter
 DEFAULT_NOW = "2026-11-11T10:00"
 
 
-async def chat(now: datetime, lang: str, trace: bool) -> None:
+def _google_client() -> Client:
+    return Client(
+        id=require("GOOGLE_OAUTH_CLIENT_ID"), secret=require("GOOGLE_OAUTH_CLIENT_SECRET")
+    )
+
+
+async def _google_store(http: httpx.AsyncClient) -> GoogleCalendarStore:
+    """The adapter on the test calendar of `.env`, with the token of `calendar-auth`."""
+    tokens = TokenSource(_google_client(), Token.load(), http)
+    return GoogleCalendarStore(require("GOOGLE_CALENDAR_ID"), tokens, http)
+
+
+async def calendar_auth() -> None:
+    """The OAuth consent flow in the browser; saves token.json (gitignored)."""
+    load_env()
+    check_test_calendar(require("GOOGLE_CALENDAR_ID"))  # before asking for consent
+    async with httpx.AsyncClient(timeout=30) as http:
+        print("opening the browser for consent (scope: calendar events only)…")
+        token = await authorize(_google_client(), http, webbrowser.open)
+    token.save()
+    until = f"{token.expires_at:%H:%M} UTC"
+    print(f"saved token.json · access token valid until {until}, then refreshed automatically")
+
+
+async def calendar_seed() -> None:
+    """Copy the seed's appointments into the test calendar, once (so moves and cancels work)."""
+    load_env()
+    clinic = load_clinic()
+    _, fake = load_seed(clinic)
+    async with httpx.AsyncClient(timeout=30) as http:
+        store = await _google_store(http)
+        everything = (datetime(2000, 1, 1, tzinfo=UTC), datetime(2100, 1, 1, tzinfo=UTC))
+        if await store.between(*everything):
+            raise SystemExit("the test calendar already has Clinic Desk appointments: not seeding")
+        for a in sorted(fake.snapshot().values(), key=lambda a: a.start):
+            stored = await store.insert(a)
+            print(f"{a.id} -> {stored.id} · {a.service_id} {a.staff_id} {a.start:%a %d %b %H:%M}")
+
+
+async def chat(now: datetime, lang: str, trace: bool, calendar: str = "fake") -> None:
     load_env()
     config = load_config()
     roles, settings = config.llm, config.receptionist
@@ -74,16 +117,23 @@ async def chat(now: datetime, lang: str, trace: bool) -> None:
     embed_client, retriever = None, None
     if settings.policies == "search" and settings.retriever != "bm25":
         embed_client, retriever = await _dense_retriever(settings.retriever)
+    google_http = httpx.AsyncClient(timeout=30) if calendar == "google" else None
+    store = await _google_store(google_http) if google_http else None
     desk = make_desk(
-        llm, lambda: now, translator=translator, policies=settings.policies, retriever=retriever
+        llm,
+        lambda: now,
+        translator=translator,
+        policies=settings.policies,
+        retriever=retriever,
+        store=store,
     )
     receptionist = Receptionist(desk, "ca" if lang == "ca" else "es")
     policies = settings.policies + (
         f"/{settings.retriever}" if settings.policies == "search" else ""
     )
     print(
-        f"[{choice.provider}/{choice.model} · policies {policies} · fake calendar"
-        f" · now {now:%a %Y-%m-%d %H:%M}]"
+        f"[{choice.provider}/{choice.model} · policies {policies}"
+        f" · {'Google test calendar' if store else 'fake calendar'} · now {now:%a %Y-%m-%d %H:%M}]"
     )
     print("[empty line or Ctrl-C to quit]\n")
     try:
@@ -106,7 +156,10 @@ async def chat(now: datetime, lang: str, trace: bool) -> None:
             await translator.aclose()
         if embed_client is not None:
             await embed_client.aclose()
-    print(f"\nupcoming in the fake calendar: {await _summary(receptionist)}")
+        upcoming = await _summary(receptionist)
+        if google_http is not None:
+            await google_http.aclose()
+    print(f"\nupcoming in the {calendar} calendar: {upcoming}")
 
 
 async def _dense_retriever(model: str) -> tuple[httpx.AsyncClient, Dense]:
@@ -568,10 +621,17 @@ def main() -> None:
             stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="clinic-desk")
     sub = parser.add_subparsers(dest="command", required=True)
-    chat_cmd = sub.add_parser("chat", help="chat with the receptionist (real model, fake calendar)")
+    chat_cmd = sub.add_parser(
+        "chat", help="chat with the receptionist (real model; fake or test calendar)"
+    )
     chat_cmd.add_argument("--now", default=DEFAULT_NOW, help="local time, YYYY-MM-DDTHH:MM")
     chat_cmd.add_argument("--lang", default="es", choices=["es", "ca"])
     chat_cmd.add_argument("--trace", action="store_true", help="print tool calls and results")
+    chat_cmd.add_argument(
+        "--calendar", default="fake", choices=["fake", "google"], help="google: the test calendar"
+    )
+    sub.add_parser("calendar-auth", help="Google OAuth consent in the browser; saves token.json")
+    sub.add_parser("calendar-seed", help="copy the seed's appointments into the test calendar")
     rag = sub.add_parser("eval-retrieval", help="hit@1/hit@3 of policy retrievers")
     rag.add_argument(
         "--embeddings",
@@ -654,7 +714,11 @@ def main() -> None:
         asyncio.run(eval_retrieval(args.embeddings))
     if args.command == "chat":
         now = datetime.fromisoformat(args.now).replace(tzinfo=ZoneInfo("Europe/Madrid"))
-        asyncio.run(chat(now, args.lang, args.trace))
+        asyncio.run(chat(now, args.lang, args.trace, args.calendar))
+    if args.command == "calendar-auth":
+        asyncio.run(calendar_auth())
+    if args.command == "calendar-seed":
+        asyncio.run(calendar_seed())
 
 
 if __name__ == "__main__":

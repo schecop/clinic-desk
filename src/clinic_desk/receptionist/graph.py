@@ -49,6 +49,7 @@ from clinic_desk.receptionist.translate import LangFix, needs_translation, trans
 from clinic_desk.retrieval import BM25, Retriever, chunks_from
 from clinic_desk.scheduling.fake import load_seed
 from clinic_desk.scheduling.models import Appointment
+from clinic_desk.scheduling.port import AppointmentStore
 from clinic_desk.scheduling.scheduler import Scheduler, SchedulingError
 
 PROMPT_PATH = Path("prompts/receptionist.md")
@@ -428,18 +429,23 @@ def make_desk(
     translator: LLMClient | None = None,
     policies: Literal["prompt", "search"] = "prompt",
     retriever: Retriever | None = None,
+    store: AppointmentStore | None = None,
 ) -> Desk:
     """A desk on the seeded fake calendar: what tests, the CLI and the simulator use.
+
+    `store` replaces the fake calendar (Google Calendar in `chat --calendar google`); the
+    patients still come from the seed. `Desk.store` stays the fake one only, for the
+    simulator's before/after diff.
 
     In search mode without a retriever, BM25 (local, free): tests never call an embedding API.
     """
     clinic = load_clinic()
     if policies == "search" and retriever is None:
         retriever = BM25(chunks_from(clinic))
-    patients, store = load_seed(clinic)
+    patients, fake = load_seed(clinic)
     return Desk(
         clinic=clinic,
-        scheduler=Scheduler(clinic, store, patients.get, clock),
+        scheduler=Scheduler(clinic, store or fake, patients.get, clock),
         patients=patients,
         llm=llm,
         prompt=prompt if prompt is not None else load_prompt(),
@@ -447,5 +453,5 @@ def make_desk(
         translator=translator,
         policies=policies,
         retriever=retriever,
-        store=store,
+        store=None if store else fake,
     )

@@ -62,25 +62,28 @@ The change logs and per-pass reports (markdown and interactive HTML, each conver
 | Coach: one exact edit, keep rule fixed before the run (ADR-0006) | Each gain can be traced to one change; a keep rule set after seeing the results is cherry-picking |
 | Sequential measurement; the coach counts patterns and must cite 3+ patients in 2+ categories (ADR-0007) | A +19-point gain scored z 1.5 with 2 repeats. Extra repeats go only to promising candidates, and a rule written for one transcript is refused before any money is spent |
 | The simulated patient chooses its language; coverage is reported, not enforced | Real callers switch languages. The earlier simulator mirrored the receptionist, and for days most calls were in Catalan without anyone noticing |
-| Tests never call live models | A scripted fake model drives the real graph and loops: 222 tests, no API key, run in CI (GitHub Actions: ruff, mypy, pytest) |
+| Tests never call live models | A scripted fake model drives the real graph and loops: 241 tests, no API key, run in CI (GitHub Actions: ruff, mypy, pytest) |
 
 ## Limits
 
+- **A $15 API budget for the whole week, on purpose** ($10.73 spent). Each judged pass costs ~$0.45, so every measurement was a trade-off between evidence and money. With no cap, every change could be measured on its own with many more repeats and personas. The goal here was to iterate fast and find a quality/price balance for a proof of concept, not to get airtight statistics.
 - **Small samples.** 14 visible and 6 held-out personas. Only large gains can be proven (around +20 points on one criterion); the total gain on held-out is not proven. A larger held-out set is the next step.
 - **The adopted prompt has not been measured as-is.** The kept example was rewritten with placeholders after measurement, and the "Bones" (Catalan greeting) fix also came after.
 - **`language` is still the weakest criterion** (~45% on visible). Most failures are "con gusto" in Spanish and "li puc ajudar" in Catalan, which the coach has not fixed yet.
 - **The receptionist model was not compared** with alternatives, and p95 latency (3.1 s) is above the 2 s target for voice.
 - **The hard-line floor of the gate was set after seeing one bad prompt**; it needs a second bad prompt to be validated.
 - **The judge was calibrated on 20 conversations, 18 of them Catalan** (before the simulator fix). Its Spanish verdicts are less validated.
-- **Google Calendar adapter (OAuth) not built**; everything runs against the in-memory fake calendar.
+- **Google Calendar is for the demo only.** The adapter (hand-written OAuth with PKCE, ADR-0008) passes the same port contract as the fake calendar against a fake Google API, but simulations always run on the in-memory calendar, and the adapter has only been tried by hand on one test calendar.
 
 ## Run it
 
 ```bash
 uv sync
-uv run pytest                      # 222 tests, fake models, no API key
+uv run pytest                      # 241 tests, fake models, no API key
 cp .env.example .env               # keys: Anthropic, Mistral, Gemini, Langfuse (optional)
 uv run clinic-desk chat            # talk to the receptionist (fake calendar)
+uv run clinic-desk calendar-auth   # Google OAuth consent (a dedicated test calendar only)
+uv run clinic-desk chat --calendar google   # the same receptionist on the test calendar
 uv run clinic-desk simulate --split visible --repeats 2        # prints the estimate; --yes to run (~$0.45)
 uv run clinic-desk gate <baseline-run> <candidate-run>         # free
 uv run clinic-desk coach --iterations 3                        # prints the estimate; --yes to run
