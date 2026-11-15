@@ -21,8 +21,8 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from clinic_desk.clinic import load_clinic
-from clinic_desk.coach.loop import Pass, Split, coach_loop
-from clinic_desk.coach.propose import Edit, failures_brief, name_words, propose
+from clinic_desk.coach.loop import Pass, Plan, Split, coach_loop
+from clinic_desk.coach.propose import Edit, name_words, propose
 from clinic_desk.config import ModelChoice, load_config
 from clinic_desk.env import load_env, require
 from clinic_desk.llm.base import AssistantMessage, Message, ToolResults
@@ -376,7 +376,7 @@ COACH_CALL_USD = Decimal("0.15")  # one proposal, worst case: 2 attempts x ~25k 
 
 async def coach_cmd(
     iterations: int,
-    repeats: int,
+    plan: Plan,
     baseline: str | None,
     prompt_file: str,
     concurrency: int,
@@ -396,24 +396,37 @@ async def coach_cmd(
     start = Path(prompt_file).read_text("utf-8")
 
     vis0 = None
+    have = 0  # repeats the reused baseline already has; it is topped up to plan.base_repeats
     if baseline:
         saved = RUNS / baseline / "prompt.md"
         if not saved.exists() or saved.read_text("utf-8") != start:
             raise SystemExit(f"{baseline} did not measure {prompt_file}: drop --baseline")
+        have = 1 + max(c.repeat for c in load_run(baseline))
 
     used = ["receptionist", "persona", "judge"] + (["translator"] if "translator" in roles else [])
     prices = {r: (roles[r].usd_per_mtok_in, roles[r].usd_per_mtok_out) for r in used}
     if "translator" not in roles:
         prices["translator"] = prices["receptionist"]
     margin = Decimal("1.2")  # the estimate ran ~12% under the real cost on 2026-11-15
-    per_vis = budget.estimate(len(split["visible"]) * repeats, prices) * margin
-    per_ho = budget.estimate(len(split["held_out"]) * repeats, prices) * margin
-    planned = (
-        per_ho + (0 if baseline else per_vis) + iterations * (per_vis + per_ho + COACH_CALL_USD)
-    )
+
+    def cost(which: Split, repeats: int) -> Decimal:
+        return budget.estimate(len(split[which]) * repeats, prices) * margin
+
+    top_up = max(plan.base_repeats - have, 0)
+    base = cost("visible", top_up) if top_up else Decimal(0)
+    cand = cost("visible", plan.repeats)
+    more = cost("visible", plan.more)
+    ho = cost("held_out", plan.held_out_repeats)
+    planned = base + ho + iterations * (cand + more + ho + COACH_CALL_USD)
+    likely = base + iterations * (cand + more / 2 + COACH_CALL_USD) + ho * 2
     print(
-        f"coach: {iterations} iterations · visible pass ~${per_vis:.2f}, held-out ~${per_ho:.2f},"
-        f" proposal ~${COACH_CALL_USD} · worst case (held-out every time) ~${planned:.2f}"
+        f"coach: {iterations} iterations · start ~${base:.2f} ({plan.base_repeats} repeats"
+        f"{f', {have} reused' if have else ''}) ·"
+        f" candidate ~${cand:.2f} ({plan.repeats}) + ~${more:.2f} if promising ({plan.more}) ·"
+        f" held-out ~${ho:.2f} ({plan.held_out_repeats}) per prompt, only for a winner ·"
+        f" proposal ~${COACH_CALL_USD}\n"
+        f"  likely (half extended, one winner) ~${likely:.2f} ·"
+        f" worst case (every candidate extended and winning) ~${planned:.2f}"
     )
     print(budget.check(planned))
     if not yes:
@@ -440,8 +453,10 @@ async def coach_cmd(
     )
     names = name_words([p.caller.name for p in all_personas])
 
-    async def evaluate(prompt: str, which: Split, label: str) -> Pass:
-        print(budget.check(per_vis if which == "visible" else per_ho))  # raises past the cap
+    categories: dict[str, str] = {p.id: p.category for p in all_personas}
+
+    async def evaluate(prompt: str, which: Split, label: str, repeats: int) -> Pass:
+        print(budget.check(cost(which, repeats)))  # raises past the cap
         personas = [by_id[pid] for pid in split[which]]
         run_id, conversations = await run_pass(
             personas,
@@ -463,9 +478,37 @@ async def coach_cmd(
         print(f"  {label}: {run_id} · criteria {score}")
         return Pass(run_id, data, conversations)
 
+    async def extend(p: Pass, more: int) -> Pass:
+        """More repeats of the same prompt into the same pass, judged, then analysed as one."""
+        print(budget.check(cost("visible", more)))
+        personas = sorted({by_id[c.persona_id].id for c in p.conversations})
+        _, added = await run_pass(
+            [by_id[pid] for pid in personas],
+            receptionist=models["receptionist"],
+            persona_model=models["persona"],
+            translator=models.get("translator"),
+            repeats=more,
+            concurrency=concurrency,
+            run_id=p.run_id,
+            exporter=exporter,
+            split_of=split_of,
+            prompt=(RUNS / p.run_id / "prompt.md").read_text("utf-8"),
+            first_repeat=max(c.repeat for c in p.conversations) + 1,
+        )
+        await _judge_conversations(p.run_id, added, "judge", roles["judge"], concurrency)
+        everything = [*p.conversations, *added]
+        verdicts = load_verdicts(p.run_id, "judge", RUNS / p.run_id)
+        (RUNS / p.run_id / "summary.md").write_text(
+            summary(p.run_id, everything, langfuse_trace_url(), verdicts) + "\n", "utf-8"
+        )
+        data = analyse(p.run_id, everything, verdicts, split_of, by_id, langfuse_trace_url())
+        score = next(s for s in data.splits if s.split != "all").criteria
+        print(f"  extended {p.run_id} by {more} repeats · criteria {score}")
+        return Pass(p.run_id, data, everything)
+
     async def propose_one(prompt: str, data: ReportData, history: str) -> tuple[Edit, str]:
         try:
-            edit, candidate = await propose(coach_llm, prompt, failures_brief(data), history, names)
+            edit, candidate = await propose(coach_llm, prompt, data, history, names, categories)
         finally:
             budget.record(calls, f"{coach_id}/coach")
             calls.clear()
@@ -477,13 +520,17 @@ async def coach_cmd(
         conversations = load_run(baseline)
         data = analyse(baseline, conversations, verdicts, split_of, by_id, langfuse_trace_url())
         vis0 = Pass(baseline, data, conversations)
+        if top_up:
+            vis0 = await extend(vis0, top_up)
     try:
         _, entries = await coach_loop(
             start,
             propose=propose_one,
             evaluate=evaluate,
+            extend=extend,
             iterations=iterations,
             out=out,
+            plan=plan,
             visible0=vis0,
         )
     finally:
@@ -542,7 +589,10 @@ def main() -> None:
     sim.add_argument("--prompt", help="receptionist prompt file (default prompts/receptionist.md)")
     co = sub.add_parser("coach", help="coach loop: one prompt change at a time (paid)")
     co.add_argument("--iterations", type=int, default=5)
-    co.add_argument("--repeats", type=int, default=2)
+    co.add_argument("--repeats", type=int, default=2, help="per candidate on visible")
+    co.add_argument("--base-repeats", type=int, default=4, help="the start prompt on visible")
+    co.add_argument("--more", type=int, default=2, help="added to a promising candidate")
+    co.add_argument("--held-out-repeats", type=int, default=4)
     co.add_argument("--baseline", help="a judged visible pass of the start prompt, to reuse")
     co.add_argument("--prompt", default="prompts/receptionist.md", help="start prompt")
     co.add_argument("--concurrency", type=int, default=4)
@@ -573,7 +623,7 @@ def main() -> None:
         asyncio.run(
             coach_cmd(
                 args.iterations,
-                args.repeats,
+                Plan(args.base_repeats, args.repeats, args.more, args.held_out_repeats),
                 args.baseline,
                 args.prompt,
                 args.concurrency,

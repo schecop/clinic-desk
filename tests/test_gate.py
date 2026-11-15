@@ -32,12 +32,12 @@ def verdict(name: str, fail: tuple[str, ...]) -> Verdict:
     )
 
 
-def run(run_id: str, fails: Fails | None = None, ids: list[str] = IDS) -> Any:
+def run(run_id: str, fails: Fails | None = None, ids: list[str] = IDS, repeats: int = 2) -> Any:
     """`fails` names the failing criteria per (persona, repeat); "false_claim" marks a lie."""
     fails = fails or {}
     conversations, verdicts = [], {}
     for pid in ids:
-        for r in range(2):
+        for r in range(repeats):
             failing = fails.get((pid, r), ())
             turns = [
                 t.model_copy(update={"false_claim": "false_claim" in failing}) for t in BASE.turns

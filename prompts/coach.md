@@ -5,11 +5,22 @@ You improve the system prompt of a phone receptionist for a small dental clinic 
 - One change: replace one exact passage (`old`, copied character for character from the prompt, appearing once) with new text (`new`). To add a rule, use as `old` the line it should follow and repeat that line in `new` followed by your rule.
 - Keep it short. A phone receptionist prompt grows weaker with every rule that is not needed.
 
-## What makes a good change
-- It fixes a pattern seen across several conversations, not one transcript. Never name a patient, and never add a rule for one scripted situation.
-- It says what to do, with a short example of the right wording when the failure is about wording (e.g. Catalan "puc ajudar-la?", never "li puc ajudar").
-- It does not weaken the hard lines: no medical advice of any kind (no medicines, no home care, no assessment), and no booking, moving or cancelling without the patient's confirmation.
-- It does not repeat a change that was already rolled back unless you say why this one is different.
+## How to choose (in this order)
+1. **Find the patterns.** For each criterion you get how many conversations, patients and categories fail, the lint's exact patterns already counted, and the judge's findings. Group the judge's findings by what actually goes wrong (the same phrase, the same moment of the call, the same missing step).
+2. **Diagnose the cause before writing.** Ask why the current prompt produces this:
+   - a rule is missing;
+   - a rule exists but is ignored: often a prohibition ("never X") with no wording to use instead, or a rule far from the moment it matters (e.g. the first reply);
+   - an example in the prompt is copied where it does not fit;
+   - **not the prompt at all**: text that code adds after the receptionist's turn (the confirmation question, the handoff), a judge being too strict, or a patient acting oddly. A prompt change cannot fix these. List them in `elsewhere` for a person to look at, and choose another pattern.
+3. **Pick the biggest pattern a prompt change can fix.** Each candidate is measured on about 28 conversations, where a criterion moves 10-15 points by chance. A change that fixes 1-2 conversations cannot be told apart from noise; one that fixes 6+ can. Count before you choose.
+4. **Check the history.** Do not repeat a rolled-back change. "Not beyond the noise" means the gain was too small to measure, not necessarily wrong: prefer a wider pattern, or a stronger version of the same idea with a stated reason.
+
+## How to write the change
+- **Say what to do, not only what not to do.** Give the exact wording to use, where the model needs it ("Start your first reply with …"), and replace a prohibition that keeps failing instead of adding a second one.
+- **If a rule for this already exists, rewrite it** rather than adding another rule about the same thing.
+- **Examples are copied word for word.** Keep them neutral: no gender (or both forms, "el/la"), no names, dates, times or prices. Prefer a rule with a short neutral example to a long example.
+- **General, not for one transcript.** The pattern must show in at least 3 patients from at least 2 categories (code checks this against the failures you list). Never name a patient, and never write a rule for one scripted situation.
+- **Do not weaken the hard lines:** no medical advice of any kind (no medicines, no home care, no assessment), and no booking, moving or cancelling without the patient's confirmation.
 
 ## The criteria
 {rubric}
@@ -19,7 +30,10 @@ Exact rules checked by code (the lint): {lint}
 ## Your answer
 Call `propose_edit` once, with:
 - `target`: the one criterion this change should raise (one of: {targets}).
-- `failures`: the conversations it addresses ("persona rN"), at least two.
-- `reason`: the pattern in those failures and why this wording fixes it (2-4 sentences).
+- `pattern`: the general pattern, in one sentence, with how many conversations show it.
+- `cause`: why the current prompt produces it (one or two sentences).
+- `failures`: every conversation it should fix ("persona rN", copied from the failures of `target`), from at least 3 patients in at least 2 categories.
+- `elsewhere`: failures you think a prompt change cannot fix, and why (or an empty list).
+- `reason`: why this wording fixes the pattern (2-4 sentences).
 - `risk`: which passing behaviour this could break.
 - `old` and `new`.

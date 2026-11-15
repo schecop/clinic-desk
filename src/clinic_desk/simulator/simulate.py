@@ -59,6 +59,7 @@ async def run_pass(
     exporter: LangfuseExporter | None = None,
     split_of: dict[str, str] | None = None,  # persona id -> "visible" / "held_out", for tags
     prompt: str | None = None,  # the receptionist prompt; None = prompts/receptionist.md
+    first_repeat: int = 0,  # > 0 adds repeats to an existing pass (the coach's sequential test)
 ) -> tuple[str, list[Conversation]]:
     run_id = run_id or new_run_id()
     folder = out / run_id
@@ -87,7 +88,7 @@ async def run_pass(
         budget.record(c.calls, run_id, ledger)
         return c
 
-    jobs = [one(p, r) for p in personas for r in range(repeats)]
+    jobs = [one(p, r) for p in personas for r in range(first_repeat, first_repeat + repeats)]
     conversations = list(await asyncio.gather(*jobs))
     text = summary(run_id, conversations, langfuse_trace_url())
     (folder / "summary.md").write_text(text + "\n", "utf-8")

@@ -75,3 +75,30 @@ def test_a_whole_pass_on_scripted_models_saves_everything(tmp_path: Path) -> Non
     assert "Code pass: 6/6" in (folder / "summary.md").read_text("utf-8")
     assert (folder / "prompt.md").read_text("utf-8").startswith("You are the phone receptionist")
     assert not (tmp_path / "cost.jsonl").exists()  # scripted calls are free: nothing recorded
+
+
+def test_more_repeats_go_into_the_same_pass_after_the_ones_it_has(tmp_path: Path) -> None:
+    # the coach's sequential test tops a pass up: r2, r3 next to r0, r1, nothing overwritten
+    [persona] = [p for p in load_personas(load_clinic()) if p.category == "policy"][:1]
+
+    def patient(req: Request) -> LLMResponse:
+        return say("Hola, una pregunta.") if len(req.messages) == 1 else say("Gracias. [DONE]")
+
+    def go(first: int) -> list[int]:
+        _, conversations = asyncio.run(
+            run_pass(
+                [persona],
+                receptionist=RoleModel(ScriptedLLM([say("Claro, le explico.")] * 4)),
+                persona_model=RoleModel(ScriptedLLM([patient] * 8)),
+                repeats=2,
+                run_id="test",
+                out=tmp_path,
+                ledger=tmp_path / "cost.jsonl",
+                first_repeat=first,
+            )
+        )
+        return [c.repeat for c in conversations]
+
+    assert go(0) == [0, 1] and go(2) == [2, 3]
+    saved = sorted(f.name for f in (tmp_path / "test").glob("*.json"))
+    assert saved == [f"{persona.id}.r{r}.json" for r in range(4)]
