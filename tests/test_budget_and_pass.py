@@ -73,4 +73,5 @@ def test_a_whole_pass_on_scripted_models_saves_everything(tmp_path: Path) -> Non
     folder = tmp_path / "test"
     assert len(list(folder.glob("*.json"))) == len(conversations)
     assert "Code pass: 6/6" in (folder / "summary.md").read_text("utf-8")
+    assert (folder / "prompt.md").read_text("utf-8").startswith("You are the phone receptionist")
     assert not (tmp_path / "cost.jsonl").exists()  # scripted calls are free: nothing recorded

@@ -42,6 +42,8 @@ from clinic_desk.simulator.calibration import (
     stem,
 )
 from clinic_desk.simulator.evaluate import judge_pass, load_verdicts
+from clinic_desk.simulator.gate import compare
+from clinic_desk.simulator.gate import to_markdown as gate_markdown
 from clinic_desk.simulator.judge import Verdict
 from clinic_desk.simulator.persona import load_personas, load_split
 from clinic_desk.simulator.report import analyse, to_html, to_markdown
@@ -174,6 +176,7 @@ async def simulate(
     label: str,
     yes: bool,
     judge_role: str | None = "judge",
+    prompt_file: str | None = None,
 ) -> None:
     """Print the estimate and the budget line; run only with --yes when it costs money."""
     load_env()
@@ -223,6 +226,7 @@ async def simulate(
             run_id=new_run_id(label),
             exporter=exporter,
             split_of=split_of,
+            prompt=Path(prompt_file).read_text("utf-8") if prompt_file else None,
         )
     finally:
         for m in models.values():
@@ -340,6 +344,31 @@ def report_cmd(run_id: str, role: str) -> None:
     print(f"saved {folder / 'report.md'} and {folder / 'report.html'}")
 
 
+def gate_cmd(baseline: str, candidate: str, role: str) -> None:
+    """Compare two judged passes; write gate.md into the candidate's folder; exit 1 on fail."""
+    load_env()
+    split_of = {pid: name for name, ids in load_split().items() for pid in ids}
+    personas = {p.id: p for p in load_personas(load_clinic())}
+    passes = []
+    for run_id in (baseline, candidate):
+        conversations = load_run(run_id)
+        verdicts = load_verdicts(run_id, role, RUNS / run_id)
+        if not verdicts:
+            raise SystemExit(f"{run_id}: no verdicts of llm.{role} (clinic-desk judge {run_id})")
+        data = analyse(run_id, conversations, verdicts, split_of, personas, langfuse_trace_url())
+        passes.append((data, conversations))
+    try:
+        result = compare(passes[0], passes[1])
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    text = gate_markdown(result)
+    (RUNS / candidate / "gate.md").write_text(text, "utf-8")
+    print(text)
+    print(f"saved {RUNS / candidate / 'gate.md'}")
+    if not result.passed:
+        raise SystemExit(1)
+
+
 def label_template_cmd(run_id: str, n: int, force: bool) -> None:
     if LABELS.exists() and not force:
         raise SystemExit(f"{LABELS} exists (hand labels?); use --force to overwrite")
@@ -382,6 +411,11 @@ def main() -> None:
     sim.add_argument("--yes", action="store_true", help="run even though it costs money")
     sim.add_argument("--judge", default="judge", help="config llm role that judges the pass")
     sim.add_argument("--no-judge", action="store_true", help="code checks only, no judge")
+    sim.add_argument("--prompt", help="receptionist prompt file (default prompts/receptionist.md)")
+    gat = sub.add_parser("gate", help="regression gate: candidate pass vs baseline (free)")
+    gat.add_argument("baseline")
+    gat.add_argument("candidate")
+    gat.add_argument("--role", default="judge", help="whose verdicts to compare")
     jdg = sub.add_parser("judge", help="judge a saved pass (real model from config; paid)")
     jdg.add_argument("run_id")
     jdg.add_argument("--role", default="judge", help="config llm role of the judge model")
@@ -400,6 +434,8 @@ def main() -> None:
         asyncio.run(judge_run(args.run_id, args.role, args.labelled, args.concurrency, args.yes))
     if args.command == "report":
         report_cmd(args.run_id, args.role)
+    if args.command == "gate":
+        gate_cmd(args.baseline, args.candidate, args.role)
     if args.command == "label-template":
         label_template_cmd(args.run_id, args.n, args.force)
     if args.command == "simulate":
@@ -412,6 +448,7 @@ def main() -> None:
                 args.label,
                 args.yes,
                 judge_role=None if args.no_judge else args.judge,
+                prompt_file=args.prompt,
             )
         )
     if args.command == "eval-retrieval":

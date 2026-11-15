@@ -17,6 +17,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+from clinic_desk.receptionist.graph import load_prompt
 from clinic_desk.simulator import budget
 from clinic_desk.simulator.judge import Verdict
 from clinic_desk.simulator.persona import Persona
@@ -56,10 +57,13 @@ async def run_pass(
     ledger: Path = budget.LEDGER,
     exporter: LangfuseExporter | None = None,
     split_of: dict[str, str] | None = None,  # persona id -> "visible" / "held_out", for tags
+    prompt: str | None = None,  # the receptionist prompt; None = prompts/receptionist.md
 ) -> tuple[str, list[Conversation]]:
     run_id = run_id or new_run_id()
     folder = out / run_id
     folder.mkdir(parents=True, exist_ok=True)
+    prompt = prompt if prompt is not None else load_prompt()
+    (folder / "prompt.md").write_text(prompt, "utf-8")  # what this pass measured, for gate + coach
     gate = asyncio.Semaphore(concurrency)
 
     async def one(p: Persona, r: int) -> Conversation:
@@ -69,6 +73,7 @@ async def run_pass(
                 receptionist=receptionist,
                 persona_model=persona_model,
                 translator=translator,
+                prompt=prompt,
                 repeat=r,
             )
         if exporter is not None:
